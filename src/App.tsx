@@ -1,224 +1,487 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import viteLogo from "/vite.svg";
+import { useState, useEffect } from "react";
 import "./App.css";
+import { GeminiClient } from "./utils/geminiClient";
 
 function App() {
-  const [count, setCount] = useState(0);
-  const [status, setStatus] = useState("");
-  const [result, setResult] = useState("");
-  const [summarizerResult, setSummarizerResult] = useState("");
-  const [streamingResult, setStreamingResult] = useState("");
+  const [status, setStatus] = useState("Checking Prompt API availability...");
+  const [availability, setAvailability] = useState<string>("");
+  const [inputText, setInputText] = useState("");
+  const [feedbackResult, setFeedbackResult] = useState("");
+  const [improveResult, setImproveResult] = useState("");
+  const [proofreadResult, setProofreadResult] = useState("");
+  const [summarizeResult, setSummarizeResult] = useState("");
+  const [translateResult, setTranslateResult] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'feedback' | 'improve' | 'proofread' | 'summarize' | 'translate'>('feedback');
+  const [geminiClient, setGeminiClient] = useState<GeminiClient | null>(null);
 
-  async function handleRun() {
+  // Check Prompt API availability on mount
+  useEffect(() => {
+    checkAvailability();
+  }, []);
+
+  async function checkAvailability() {
     try {
-      setStatus("Checking model availability...");
-      console.log("Checking availability...");
-
-      const availability = await LanguageModel.availability();
-      console.log("Availability:", availability);
-      setStatus(`Model status: ${availability}`);
-
-      if (availability === "unavailable") {
-        setStatus("Gemini Nano not supported on this device.");
+      if (!('LanguageModel' in window)) {
+        setStatus("❌ Prompt API not supported. Please use Chrome 127+ and enable flags.");
+        setAvailability("unavailable");
         return;
       }
 
-      setStatus("Creating session...");
-      console.log("Creating language model session...");
+      const availabilityStatus = await (window as any).LanguageModel.availability();
+      setAvailability(availabilityStatus);
 
-      const session = await LanguageModel.create({
-        language: "en",
-        monitor(monitor) {
-          console.log("Monitor attached");
-          monitor.addEventListener("downloadprogress", (e: any) => {
-            console.log("Download progress:", e.loaded);
-            setStatus(`Downloading model: ${(e.loaded * 100).toFixed(1)}%`);
-          });
-        },
-      });
-
-      console.log("Session created successfully");
-      setStatus("Running prompt...");
-      const output = await session.prompt(
-        "Write a one-line poem about the Chrome Prompt API."
-      );
-
-      console.log("Prompt completed");
-      setResult(output);
-      setStatus("Done!");
-    } catch (err: any) {
-      console.error("Error:", err);
-      setStatus("Error: " + err.message);
+      if (availabilityStatus === 'available') {
+        setStatus("✅ Gemini Nano is ready! Try the features below.");
+      } else if (availabilityStatus === 'downloading') {
+        setStatus("⏳ Gemini Nano is downloading... Please wait (this may take a few minutes).");
+        // Poll for completion
+        pollForAvailability();
+      } else {
+        setStatus("❌ Gemini Nano not available. Check setup instructions below.");
+      }
+    } catch (error) {
+      console.error('Error checking availability:', error);
+      setStatus("❌ Error checking Prompt API. Make sure flags are enabled.");
+      setAvailability("unavailable");
     }
   }
 
-  async function handleSummarizer() {
-    try {
-      setStatus("Checking model availability...");
-      console.log("Checking availability...");
+  function pollForAvailability() {
+    const interval = setInterval(async () => {
+      try {
+        const availabilityStatus = await (window as any).LanguageModel.availability();
+        setAvailability(availabilityStatus);
 
-      const availability = await Summarizer.availability();
-      console.log("Availability:", availability);
-      setStatus(`Model status: ${availability}`);
-
-      if (availability === "unavailable") {
-        setStatus("Summarizer not supported on this device.");
-        return;
-      }
-
-      setStatus("Creating session...");
-      console.log("Creating summarizer session...");
-
-      const session = await Summarizer.create({
-        sharedContext: 'This is a technical article',
-        type: 'key-points',
-        format: 'markdown',
-        length: 'medium',
-        monitor(monitor) {
-          monitor.addEventListener('downloadprogress', (e) => {
-            console.log(`Downloaded ${e.loaded * 100}%`);
-            setStatus(`Downloading model: ${(e.loaded * 100).toFixed(1)}%`);
-          });
+        if (availabilityStatus === 'available') {
+          setStatus("✅ Gemini Nano download complete! Ready to use.");
+          clearInterval(interval);
+        } else if (availabilityStatus === 'unavailable') {
+          setStatus("❌ Download failed. Please check your setup.");
+          clearInterval(interval);
         }
-      });
-
-      console.log("Session created successfully");
-      setStatus("Running batch summarization...");
-      
-      const longText = "The Chrome Prompt API allows developers to integrate advanced language models directly into web applications, enabling features like text generation, summarization, and more, all while ensuring user data privacy by running models locally on the user's device. This revolutionary approach eliminates the need for server-side processing and ensures that sensitive user data never leaves their device. The API provides multiple capabilities including text generation through Gemini Nano, text summarization for creating concise versions of long content, and various other AI-powered features that can enhance user experiences across web applications.";
-      
-      const output = await session.summarize(longText, {
-        context: 'This article is intended for a tech-savvy audience.'
-      });
-
-      console.log("Batch summarization completed");
-      setSummarizerResult(output);
-      setStatus("Done!");
-    } catch (err: any) {
-      console.error("Error:", err);
-      setStatus("Error: " + err.message);
-    }
+      } catch (error) {
+        clearInterval(interval);
+      }
+    }, 5000); // Check every 5 seconds
   }
 
-  async function handleStreamingSummarizer() {
+  async function handleGetFeedback() {
+    if (!inputText.trim()) {
+      alert('Please enter some text first!');
+      return;
+    }
+
+    setLoading(true);
+    setFeedbackResult('');
+    setStatus('🤔 Getting AI feedback...');
+
     try {
-      setStatus("Checking model availability...");
-      setStreamingResult("");
-
-      const availability = await Summarizer.availability();
-      if (availability === "unavailable") {
-        setStatus("Summarizer not supported on this device.");
-        return;
+      // Initialize client if not already done
+      let client = geminiClient;
+      if (!client) {
+        client = new GeminiClient();
+        await client.initializeSession();
+        setGeminiClient(client);
       }
 
-      setStatus("Creating session...");
-      const session = await Summarizer.create({
-        sharedContext: 'This is a technical article for developers',
-        type: 'tldr',
-        format: 'plain-text',
-        length: 'short',
-        monitor(monitor) {
-          monitor.addEventListener('downloadprogress', (e) => {
-            setStatus(`Downloading model: ${(e.loaded * 100).toFixed(1)}%`);
-          });
-        }
-      });
-
-      setStatus("Running streaming summarization...");
-      
-      const longText = "The Chrome Prompt API allows developers to integrate advanced language models directly into web applications, enabling features like text generation, summarization, and more, all while ensuring user data privacy by running models locally on the user's device. This revolutionary approach eliminates the need for server-side processing and ensures that sensitive user data never leaves their device. The API provides multiple capabilities including text generation through Gemini Nano, text summarization for creating concise versions of long content, and various other AI-powered features that can enhance user experiences across web applications. Developers can now build intelligent applications that respect user privacy while providing powerful AI capabilities.";
-      
-      const stream = session.summarizeStreaming(longText, {
-        context: 'This article is intended for junior developers.'
-      });
-
-      let fullResult = "";
-      for await (const chunk of stream) {
-        fullResult += chunk;
-        setStreamingResult(fullResult);
-        console.log("Streaming chunk:", chunk);
-      }
-
-      setStatus("Streaming summarization completed!");
-    } catch (err: any) {
-      console.error("Error:", err);
-      setStatus("Error: " + err.message);
+      const feedback = await client.getInterviewFeedback(inputText);
+      setFeedbackResult(feedback);
+      setStatus('✅ Feedback received!');
+    } catch (error) {
+      setFeedbackResult(`Error: ${error}`);
+      setStatus('❌ Failed to get feedback.');
+    } finally {
+      setLoading(false);
     }
   }
+
+  async function handleImproveText(style: 'professional' | 'casual' | 'concise') {
+    if (!inputText.trim()) {
+      alert('Please enter some text first!');
+      return;
+    }
+
+    setLoading(true);
+    setImproveResult('');
+    setStatus(`✍️ Improving text (${style} style)...`);
+
+    try {
+      // Initialize client if not already done
+      let client = geminiClient;
+      if (!client) {
+        client = new GeminiClient();
+        await client.initializeSession();
+        setGeminiClient(client);
+      }
+
+      const improved = await client.improveText(inputText, style);
+      setImproveResult(improved);
+      setStatus('✅ Text improved!');
+    } catch (error) {
+      setImproveResult(`Error: ${error}`);
+      setStatus('❌ Failed to improve text.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleProofread() {
+    if (!inputText.trim()) {
+      alert('Please enter some text first!');
+      return;
+    }
+
+    setLoading(true);
+    setProofreadResult('');
+    setStatus('📝 Proofreading text...');
+
+    try {
+      // Initialize client if not already done
+      let client = geminiClient;
+      if (!client) {
+        client = new GeminiClient();
+        await client.initializeSession();
+        setGeminiClient(client);
+      }
+
+      const proofread = await client.proofread(inputText);
+      setProofreadResult(proofread);
+      setStatus('✅ Proofreading complete!');
+    } catch (error) {
+      setProofreadResult(`Error: ${error}`);
+      setStatus('❌ Failed to proofread.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSummarize(length: 'short' | 'medium' | 'long') {
+    if (!inputText.trim()) {
+      alert('Please enter some text first!');
+      return;
+    }
+
+    setLoading(true);
+    setSummarizeResult('');
+    setStatus(`📊 Creating ${length} summary...`);
+
+    try {
+      // Initialize client if not already done
+      let client = geminiClient;
+      if (!client) {
+        client = new GeminiClient();
+        await client.initializeSession();
+        setGeminiClient(client);
+      }
+
+      const summary = await client.summarize(inputText, length);
+      setSummarizeResult(summary);
+      setStatus('✅ Summary created!');
+    } catch (error) {
+      setSummarizeResult(`Error: ${error}`);
+      setStatus('❌ Failed to summarize.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleTranslate(targetLanguage: string) {
+    if (!inputText.trim()) {
+      alert('Please enter some text first!');
+      return;
+    }
+
+    if (!targetLanguage.trim()) {
+      alert('Please enter a target language!');
+      return;
+    }
+
+    setLoading(true);
+    setTranslateResult('');
+    setStatus(`🌍 Translating to ${targetLanguage}...`);
+
+    try {
+      // Initialize client if not already done
+      let client = geminiClient;
+      if (!client) {
+        client = new GeminiClient();
+        await client.initializeSession();
+        setGeminiClient(client);
+      }
+
+      const translation = await client.translate(inputText, targetLanguage);
+      setTranslateResult(translation);
+      setStatus('✅ Translation complete!');
+    } catch (error) {
+      setTranslateResult(`Error: ${error}`);
+      setStatus('❌ Failed to translate.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const tabs = [
+    { id: 'feedback', label: '🎯 Interview Feedback', icon: '💬' },
+    { id: 'improve', label: '✍️ Improve Text', icon: '✨' },
+    { id: 'proofread', label: '📝 Proofread', icon: '✓' },
+    { id: 'summarize', label: '📊 Summarize', icon: '📄' },
+    { id: 'translate', label: '🌍 Translate', icon: '🗣️' }
+  ] as const;
 
   return (
-    <>
-      <div className="flex justify-center gap-8 my-8">
-        <a href="https://vite.dev" target="_blank" rel="noopener noreferrer">
-          <img
-            src={viteLogo}
-            className="h-24 w-24 transition-transform hover:scale-110"
-            alt="Vite logo"
-          />
-        </a>
-        <a href="https://react.dev" target="_blank" rel="noopener noreferrer">
-          <img
-            src={reactLogo}
-            className="h-24 w-24 transition-transform hover:scale-110"
-            alt="React logo"
-          />
-        </a>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mb-2">
+            InterviewCoach.AI
+          </h1>
+          <p className="text-gray-600">AI-Powered Writing Assistant • On-Device • No API Key Needed</p>
+        </div>
+
+        {/* Status Card */}
+        <div className={`p-4 rounded-lg mb-6 ${
+          availability === 'available' ? 'bg-green-100 border-green-500' :
+          availability === 'downloading' ? 'bg-yellow-100 border-yellow-500' :
+          'bg-red-100 border-red-500'
+        } border-l-4`}>
+          <div className="flex items-center justify-between">
+            <p className="font-medium">{status}</p>
+            <button
+              onClick={checkAvailability}
+              className="px-3 py-1 text-sm bg-white rounded-md hover:bg-gray-100 transition-colors"
+            >
+              🔄 Refresh
+            </button>
+          </div>
+
+          {availability === 'unavailable' && (
+            <div className="mt-4 text-sm">
+              <p className="font-semibold mb-2">Setup Required:</p>
+              <ol className="list-decimal ml-5 space-y-1">
+                <li>Open <code className="bg-gray-800 text-white px-2 py-0.5 rounded">chrome://flags/#optimization-guide-on-device-model</code></li>
+                <li>Set to <strong>"Enabled BypassPerfRequirement"</strong></li>
+                <li>Open <code className="bg-gray-800 text-white px-2 py-0.5 rounded">chrome://flags/#prompt-api-for-gemini-nano</code></li>
+                <li>Set to <strong>"Enabled"</strong></li>
+                <li>Restart Chrome</li>
+              </ol>
+            </div>
+          )}
+        </div>
+
+        {/* Main Content */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          {/* Tabs */}
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {tab.icon} {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Input Area */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Enter your text:
+            </label>
+            <textarea
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="Type or paste your text here..."
+              className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              disabled={availability !== 'available'}
+            />
+            <p className="text-sm text-gray-500 mt-1">
+              {inputText.length} characters
+            </p>
+          </div>
+
+          {/* Tab Content */}
+          <div className="space-y-4">
+            {/* Feedback Tab */}
+            {activeTab === 'feedback' && (
+              <div>
+                <p className="text-gray-600 mb-4">
+                  Get AI-powered feedback on your interview responses, including analysis of clarity, structure, and communication style.
+                </p>
+                <button
+                  onClick={handleGetFeedback}
+                  disabled={loading || availability !== 'available'}
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                >
+                  {loading ? '⏳ Processing...' : '🎯 Get AI Feedback'}
+                </button>
+                {feedbackResult && (
+                  <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <h3 className="font-semibold text-purple-900 mb-2">AI Feedback:</h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">{feedbackResult}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Improve Tab */}
+            {activeTab === 'improve' && (
+              <div>
+                <p className="text-gray-600 mb-4">
+                  Enhance your text with different writing styles.
+                </p>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    onClick={() => handleImproveText('professional')}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    💼 Professional
+                  </button>
+                  <button
+                    onClick={() => handleImproveText('casual')}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    😊 Casual
+                  </button>
+                  <button
+                    onClick={() => handleImproveText('concise')}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-orange-600 text-white py-3 rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ✂️ Concise
+                  </button>
+                </div>
+                {improveResult && (
+                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h3 className="font-semibold text-blue-900 mb-2">Improved Text:</h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">{improveResult}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Proofread Tab */}
+            {activeTab === 'proofread' && (
+              <div>
+                <p className="text-gray-600 mb-4">
+                  Check grammar, spelling, and punctuation errors.
+                </p>
+                <button
+                  onClick={handleProofread}
+                  disabled={loading || availability !== 'available'}
+                  className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                >
+                  {loading ? '⏳ Processing...' : '📝 Proofread Text'}
+                </button>
+                {proofreadResult && (
+                  <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                    <h3 className="font-semibold text-green-900 mb-2">Proofread Version:</h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">{proofreadResult}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Summarize Tab */}
+            {activeTab === 'summarize' && (
+              <div>
+                <p className="text-gray-600 mb-4">
+                  Create summaries of different lengths.
+                </p>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    onClick={() => handleSummarize('short')}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-yellow-600 text-white py-3 rounded-lg font-medium hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    📄 Short
+                  </button>
+                  <button
+                    onClick={() => handleSummarize('medium')}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-orange-600 text-white py-3 rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    📋 Medium
+                  </button>
+                  <button
+                    onClick={() => handleSummarize('long')}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    📰 Long
+                  </button>
+                </div>
+                {summarizeResult && (
+                  <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <h3 className="font-semibold text-yellow-900 mb-2">Summary:</h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">{summarizeResult}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Translate Tab */}
+            {activeTab === 'translate' && (
+              <div>
+                <p className="text-gray-600 mb-4">
+                  Translate text to another language.
+                </p>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <button
+                    onClick={() => handleTranslate('Spanish')}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    🇪🇸 Spanish
+                  </button>
+                  <button
+                    onClick={() => handleTranslate('French')}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    🇫🇷 French
+                  </button>
+                  <button
+                    onClick={() => handleTranslate('German')}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    🇩🇪 German
+                  </button>
+                  <button
+                    onClick={() => handleTranslate('Japanese')}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-pink-600 text-white py-3 rounded-lg font-medium hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    🇯🇵 Japanese
+                  </button>
+                </div>
+                {translateResult && (
+                  <div className="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <h3 className="font-semibold text-indigo-900 mb-2">Translation:</h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">{translateResult}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-6 text-center text-sm text-gray-600">
+          <p>🔒 100% Private • All processing happens on your device</p>
+          <p className="mt-1">Powered by Chrome's Gemini Nano</p>
+        </div>
       </div>
-
-      <h1 className="text-4xl font-bold text-center mb-6">Vite + React</h1>
-
-      <div className="card bg-white rounded-lg shadow p-6 mx-auto max-w-md text-center">
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors mb-4"
-          onClick={() => setCount((c) => c + 1)}
-        >
-          count is {count}
-        </button>
-
-        <button
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors mb-4"
-          onClick={handleRun}
-        >
-          Run Gemini Nano
-        </button>
-
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors mb-4 mr-2"
-          onClick={handleSummarizer}
-        >
-          Batch Summarizer
-        </button>
-
-        <button
-          className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition-colors mb-4"
-          onClick={handleStreamingSummarizer}
-        >
-          Streaming Summarizer
-        </button>
-
-
-        <p>{status}</p>
-        {result && (
-          <div className="mt-4 p-2 bg-gray-100 rounded text-left">
-            <h3 className="font-semibold mb-2">Language Model Result:</h3>
-            <p>{result}</p>
-          </div>
-        )}
-        {summarizerResult && (
-          <div className="mt-4 p-2 bg-blue-50 rounded text-left">
-            <h3 className="font-semibold mb-2">Batch Summary:</h3>
-            <p>{summarizerResult}</p>
-          </div>
-        )}
-        {streamingResult && (
-          <div className="mt-4 p-2 bg-purple-50 rounded text-left">
-            <h3 className="font-semibold mb-2">Streaming Summary:</h3>
-            <p>{streamingResult}</p>
-          </div>
-        )}
-      </div>
-    </>
+    </div>
   );
 }
 
