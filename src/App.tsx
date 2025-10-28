@@ -3,46 +3,91 @@ import "./App.css";
 import { GeminiClient } from "./utils/geminiClient";
 
 function App() {
-  const [status, setStatus] = useState("Checking Prompt API availability...");
+  const [status, setStatus] = useState("Checking API availability...");
   const [availability, setAvailability] = useState<string>("");
   const [inputText, setInputText] = useState("");
   const [feedbackResult, setFeedbackResult] = useState("");
   const [improveResult, setImproveResult] = useState("");
-  const [proofreadResult, setProofreadResult] = useState("");
-  const [summarizeResult, setSummarizeResult] = useState("");
-  const [translateResult, setTranslateResult] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'feedback' | 'improve' | 'proofread' | 'summarize' | 'translate'>('feedback');
+  const [activeTab, setActiveTab] = useState<'interview-prep' | 'feedback' | 'improve'>('interview-prep');
   const [geminiClient, setGeminiClient] = useState<GeminiClient | null>(null);
 
-  // Check Prompt API availability on mount
+  // Interview Prep states
+  const [jobDescription, setJobDescription] = useState("");
+  const [jdAnalysisResult, setJdAnalysisResult] = useState("");
+  const [interviewQuestions, setInterviewQuestions] = useState("");
+
+  // Check API availability on mount
   useEffect(() => {
     checkAvailability();
+    checkContextMenuAction();
   }, []);
+
+  // Check if user came from context menu
+  async function checkContextMenuAction() {
+    try {
+      const result = await chrome.storage.local.get(['contextMenuAction', 'selectedText', 'timestamp']);
+
+      if (result.contextMenuAction && result.selectedText) {
+        const action = result.contextMenuAction as string;
+        const text = result.selectedText as string;
+        const timestamp = result.timestamp as number;
+
+        // Only process if recent (within last 5 seconds)
+        if (Date.now() - timestamp < 5000) {
+          if (action === 'analyze-job-description') {
+            setJobDescription(text);
+            setActiveTab('interview-prep');
+            // Auto-analyze after a short delay
+            setTimeout(() => {
+              handleAnalyzeJobDescription();
+            }, 500);
+          } else if (action === 'generate-questions') {
+            setJobDescription(text);
+            setActiveTab('interview-prep');
+            // Auto-generate after a short delay
+            setTimeout(() => {
+              handleGenerateQuestions();
+            }, 500);
+          } else if (action === 'get-feedback') {
+            setInputText(text);
+            setActiveTab('feedback');
+          } else if (action === 'improve-text') {
+            setInputText(text);
+            setActiveTab('improve');
+          }
+
+          // Clear the action after processing
+          chrome.storage.local.remove(['contextMenuAction', 'selectedText', 'timestamp']);
+        }
+      }
+    } catch (error) {
+      console.log('Not running in extension context or error:', error);
+    }
+  }
 
   async function checkAvailability() {
     try {
+      // Check Prompt API
       if (!('LanguageModel' in window)) {
         setStatus("❌ Prompt API not supported. Please use Chrome 127+ and enable flags.");
         setAvailability("unavailable");
-        return;
-      }
-
-      const availabilityStatus = await (window as any).LanguageModel.availability();
-      setAvailability(availabilityStatus);
-
-      if (availabilityStatus === 'available') {
-        setStatus("✅ Gemini Nano is ready! Try the features below.");
-      } else if (availabilityStatus === 'downloading') {
-        setStatus("⏳ Gemini Nano is downloading... Please wait (this may take a few minutes).");
-        // Poll for completion
-        pollForAvailability();
       } else {
-        setStatus("❌ Gemini Nano not available. Check setup instructions below.");
+        const availabilityStatus = await (window as any).LanguageModel.availability();
+        setAvailability(availabilityStatus);
+
+        if (availabilityStatus === 'available') {
+          setStatus("✅ Gemini Nano is ready!");
+        } else if (availabilityStatus === 'downloading') {
+          setStatus("⏳ Gemini Nano is downloading... Please wait.");
+          pollForAvailability();
+        } else {
+          setStatus("❌ Gemini Nano not available. Check setup instructions below.");
+        }
       }
     } catch (error) {
       console.error('Error checking availability:', error);
-      setStatus("❌ Error checking Prompt API. Make sure flags are enabled.");
+      setStatus("❌ Error checking API. Make sure flags are enabled.");
       setAvailability("unavailable");
     }
   }
@@ -126,18 +171,18 @@ function App() {
     }
   }
 
-  async function handleProofread() {
-    if (!inputText.trim()) {
-      alert('Please enter some text first!');
+
+  async function handleAnalyzeJobDescription() {
+    if (!jobDescription.trim()) {
+      alert('Please paste a job description first!');
       return;
     }
 
     setLoading(true);
-    setProofreadResult('');
-    setStatus('📝 Proofreading text...');
+    setJdAnalysisResult('');
+    setStatus('🔍 Analyzing job description...');
 
     try {
-      // Initialize client if not already done
       let client = geminiClient;
       if (!client) {
         client = new GeminiClient();
@@ -145,29 +190,28 @@ function App() {
         setGeminiClient(client);
       }
 
-      const proofread = await client.proofread(inputText);
-      setProofreadResult(proofread);
-      setStatus('✅ Proofreading complete!');
+      const analysis = await client.analyzeJobDescription(jobDescription);
+      setJdAnalysisResult(analysis);
+      setStatus('✅ Job description analyzed!');
     } catch (error) {
-      setProofreadResult(`Error: ${error}`);
-      setStatus('❌ Failed to proofread.');
+      setJdAnalysisResult(`Error: ${error}`);
+      setStatus('❌ Failed to analyze job description.');
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleSummarize(length: 'short' | 'medium' | 'long') {
-    if (!inputText.trim()) {
-      alert('Please enter some text first!');
+  async function handleGenerateQuestions() {
+    if (!jobDescription.trim()) {
+      alert('Please paste a job description first!');
       return;
     }
 
     setLoading(true);
-    setSummarizeResult('');
-    setStatus(`📊 Creating ${length} summary...`);
+    setInterviewQuestions('');
+    setStatus('💭 Generating interview questions...');
 
     try {
-      // Initialize client if not already done
       let client = geminiClient;
       if (!client) {
         client = new GeminiClient();
@@ -175,69 +219,40 @@ function App() {
         setGeminiClient(client);
       }
 
-      const summary = await client.summarize(inputText, length);
-      setSummarizeResult(summary);
-      setStatus('✅ Summary created!');
+      const questions = await client.generateInterviewQuestions(jobDescription);
+      setInterviewQuestions(questions);
+      setStatus('✅ Interview questions generated!');
     } catch (error) {
-      setSummarizeResult(`Error: ${error}`);
-      setStatus('❌ Failed to summarize.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleTranslate(targetLanguage: string) {
-    if (!inputText.trim()) {
-      alert('Please enter some text first!');
-      return;
-    }
-
-    if (!targetLanguage.trim()) {
-      alert('Please enter a target language!');
-      return;
-    }
-
-    setLoading(true);
-    setTranslateResult('');
-    setStatus(`🌍 Translating to ${targetLanguage}...`);
-
-    try {
-      // Initialize client if not already done
-      let client = geminiClient;
-      if (!client) {
-        client = new GeminiClient();
-        await client.initializeSession();
-        setGeminiClient(client);
-      }
-
-      const translation = await client.translate(inputText, targetLanguage);
-      setTranslateResult(translation);
-      setStatus('✅ Translation complete!');
-    } catch (error) {
-      setTranslateResult(`Error: ${error}`);
-      setStatus('❌ Failed to translate.');
+      setInterviewQuestions(`Error: ${error}`);
+      setStatus('❌ Failed to generate questions.');
     } finally {
       setLoading(false);
     }
   }
 
   const tabs = [
-    { id: 'feedback', label: '🎯 Interview Feedback', icon: '💬' },
-    { id: 'improve', label: '✍️ Improve Text', icon: '✨' },
-    { id: 'proofread', label: '📝 Proofread', icon: '✓' },
-    { id: 'summarize', label: '📊 Summarize', icon: '📄' },
-    { id: 'translate', label: '🌍 Translate', icon: '🗣️' }
+    { id: 'interview-prep', label: '🎯 Interview Prep', icon: '📋' },
+    { id: 'feedback', label: '💬 Answer Feedback', icon: '🎤' },
+    { id: 'improve', label: '✍️ Improve Text', icon: '✨' }
   ] as const;
 
+  // Check if running in iframe (sidebar mode)
+  const isInSidebar = window.self !== window.top;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className={`${isInSidebar ? 'min-h-full' : 'min-h-screen'} bg-gradient-to-br from-purple-50 to-blue-50 p-6`}>
+      <div className={isInSidebar ? 'max-w-full' : 'max-w-4xl mx-auto'}>
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mb-2">
             InterviewCoach.AI
           </h1>
-          <p className="text-gray-600">AI-Powered Writing Assistant • On-Device • No API Key Needed</p>
+          <p className="text-gray-600">AI-Powered Interview Prep • On-Device • No API Key Needed</p>
+          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-sm text-blue-800">
+              💡 <strong>Pro Tip:</strong> Highlight job descriptions on any webpage, right-click → <strong>"InterviewCoach.AI"</strong> → then click the extension icon to see results!
+            </p>
+          </div>
         </div>
 
         {/* Status Card */}
@@ -259,12 +274,22 @@ function App() {
           {availability === 'unavailable' && (
             <div className="mt-4 text-sm">
               <p className="font-semibold mb-2">Setup Required:</p>
+
+              {/* Prompt API Setup */}
+              <div className="mb-3">
+                <p className="font-medium text-purple-700 mb-1">For Prompt API (Interview Features):</p>
+                <ol className="list-decimal ml-5 space-y-1">
+                  <li>Open <code className="bg-gray-800 text-white px-2 py-0.5 rounded">chrome://flags/#optimization-guide-on-device-model</code></li>
+                  <li>Set to <strong>"Enabled BypassPerfRequirement"</strong></li>
+                  <li>Open <code className="bg-gray-800 text-white px-2 py-0.5 rounded">chrome://flags/#prompt-api-for-gemini-nano</code></li>
+                  <li>Set to <strong>"Enabled"</strong></li>
+                </ol>
+              </div>
+
+              <p className="mt-2 font-semibold">Finally:</p>
               <ol className="list-decimal ml-5 space-y-1">
-                <li>Open <code className="bg-gray-800 text-white px-2 py-0.5 rounded">chrome://flags/#optimization-guide-on-device-model</code></li>
-                <li>Set to <strong>"Enabled BypassPerfRequirement"</strong></li>
-                <li>Open <code className="bg-gray-800 text-white px-2 py-0.5 rounded">chrome://flags/#prompt-api-for-gemini-nano</code></li>
-                <li>Set to <strong>"Enabled"</strong></li>
                 <li>Restart Chrome</li>
+                <li>The AI model will download automatically (may take a few minutes)</li>
               </ol>
             </div>
           )}
@@ -308,6 +333,69 @@ function App() {
 
           {/* Tab Content */}
           <div className="space-y-4">
+            {/* Interview Prep Tab */}
+            {activeTab === 'interview-prep' && (
+              <div>
+                <p className="text-gray-600 mb-4">
+                  Paste a job description to get AI-powered analysis and personalized interview questions.
+                </p>
+
+                {/* Job Description Input */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Job Description:
+                  </label>
+                  <textarea
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    placeholder="Paste the full job description here..."
+                    className="w-full h-48 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    disabled={availability !== 'available'}
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    {jobDescription.length} characters
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <button
+                    onClick={handleAnalyzeJobDescription}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  >
+                    {loading && !interviewQuestions ? '⏳ Analyzing...' : '🔍 Analyze JD'}
+                  </button>
+                  <button
+                    onClick={handleGenerateQuestions}
+                    disabled={loading || availability !== 'available'}
+                    className="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  >
+                    {loading && interviewQuestions !== jdAnalysisResult ? '⏳ Generating...' : '💭 Generate Questions'}
+                  </button>
+                </div>
+
+                {/* Results */}
+                {jdAnalysisResult && (
+                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                      🔍 Job Description Analysis
+                    </h3>
+                    <div className="text-gray-700 whitespace-pre-wrap">{jdAnalysisResult}</div>
+                  </div>
+                )}
+
+                {interviewQuestions && (
+                  <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                      💭 Likely Interview Questions
+                    </h3>
+                    <div className="text-gray-700 whitespace-pre-wrap">{interviewQuestions}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Feedback Tab */}
             {activeTab === 'feedback' && (
               <div>
@@ -368,110 +456,6 @@ function App() {
               </div>
             )}
 
-            {/* Proofread Tab */}
-            {activeTab === 'proofread' && (
-              <div>
-                <p className="text-gray-600 mb-4">
-                  Check grammar, spelling, and punctuation errors.
-                </p>
-                <button
-                  onClick={handleProofread}
-                  disabled={loading || availability !== 'available'}
-                  className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-                >
-                  {loading ? '⏳ Processing...' : '📝 Proofread Text'}
-                </button>
-                {proofreadResult && (
-                  <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
-                    <h3 className="font-semibold text-green-900 mb-2">Proofread Version:</h3>
-                    <p className="text-gray-700 whitespace-pre-wrap">{proofreadResult}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Summarize Tab */}
-            {activeTab === 'summarize' && (
-              <div>
-                <p className="text-gray-600 mb-4">
-                  Create summaries of different lengths.
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    onClick={() => handleSummarize('short')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-yellow-600 text-white py-3 rounded-lg font-medium hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    📄 Short
-                  </button>
-                  <button
-                    onClick={() => handleSummarize('medium')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-orange-600 text-white py-3 rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    📋 Medium
-                  </button>
-                  <button
-                    onClick={() => handleSummarize('long')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    📰 Long
-                  </button>
-                </div>
-                {summarizeResult && (
-                  <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <h3 className="font-semibold text-yellow-900 mb-2">Summary:</h3>
-                    <p className="text-gray-700 whitespace-pre-wrap">{summarizeResult}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Translate Tab */}
-            {activeTab === 'translate' && (
-              <div>
-                <p className="text-gray-600 mb-4">
-                  Translate text to another language.
-                </p>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <button
-                    onClick={() => handleTranslate('Spanish')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    🇪🇸 Spanish
-                  </button>
-                  <button
-                    onClick={() => handleTranslate('French')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    🇫🇷 French
-                  </button>
-                  <button
-                    onClick={() => handleTranslate('German')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    🇩🇪 German
-                  </button>
-                  <button
-                    onClick={() => handleTranslate('Japanese')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-pink-600 text-white py-3 rounded-lg font-medium hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    🇯🇵 Japanese
-                  </button>
-                </div>
-                {translateResult && (
-                  <div className="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
-                    <h3 className="font-semibold text-indigo-900 mb-2">Translation:</h3>
-                    <p className="text-gray-700 whitespace-pre-wrap">{translateResult}</p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
 

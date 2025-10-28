@@ -2,13 +2,293 @@
  * InterviewCoach.AI Content Script
  * Monitors text inputs on YouTube, Google Meet, and any webpage
  * Captures user input and sends it to background for AI feedback
+ * Injects sidebar for interview prep features
  */
 
 interface MessagePayload {
-  type: 'TEXT_CAPTURED' | 'REQUEST_FEEDBACK';
+  type: 'TEXT_CAPTURED' | 'REQUEST_FEEDBACK' | 'OPEN_SIDEBAR';
   text: string;
   url: string;
   timestamp: number;
+  action?: string;
+}
+
+/**
+ * Sidebar Panel for Interview Prep
+ */
+class InterviewCoachSidebar {
+  private sidebar: HTMLElement | null = null;
+  private iframe: HTMLIFrameElement | null = null;
+  private isVisible: boolean = false;
+
+  constructor() {
+    console.log('InterviewCoach.AI: Sidebar class initialized');
+    this.createSidebar();
+    this.setupMessageListener();
+  }
+
+  private createSidebar(): void {
+    // Check if sidebar already exists
+    const existing = document.getElementById('interview-coach-sidebar');
+    if (existing) {
+      console.log('InterviewCoach.AI: Sidebar already exists, reusing');
+      this.sidebar = existing;
+      this.iframe = document.getElementById('interview-coach-iframe') as HTMLIFrameElement;
+      return;
+    }
+
+    // Create sidebar container
+    const sidebar = document.createElement('div');
+    sidebar.id = 'interview-coach-sidebar';
+    sidebar.className = 'interview-coach-sidebar-hidden';
+
+    // Create header with close button
+    const header = document.createElement('div');
+    header.className = 'interview-coach-sidebar-header';
+    header.innerHTML = `
+      <div class="interview-coach-sidebar-title">
+        <span class="interview-coach-logo">🎯</span>
+        <span>InterviewCoach.AI</span>
+      </div>
+      <button class="interview-coach-close-btn" id="interview-coach-close">✕</button>
+    `;
+
+    // Create iframe to load extension popup
+    const iframe = document.createElement('iframe');
+    iframe.id = 'interview-coach-iframe';
+    iframe.src = chrome.runtime.getURL('index.html');
+    iframe.className = 'interview-coach-iframe';
+    iframe.setAttribute('allow', 'web-share');
+
+    // Ensure iframe loads properly
+    iframe.onload = () => {
+      console.log('InterviewCoach.AI: Iframe loaded successfully');
+    };
+    iframe.onerror = (error) => {
+      console.error('InterviewCoach.AI: Iframe failed to load', error);
+    };
+
+    // Assemble sidebar
+    sidebar.appendChild(header);
+    sidebar.appendChild(iframe);
+    document.body.appendChild(sidebar);
+
+    // Add styles
+    this.injectStyles();
+
+    // Setup close button
+    const closeBtn = document.getElementById('interview-coach-close');
+    closeBtn?.addEventListener('click', () => this.hide());
+
+    // Setup resize handle
+    this.setupResizeHandle(sidebar);
+
+    this.sidebar = sidebar;
+    this.iframe = iframe;
+
+    console.log('InterviewCoach.AI: Sidebar created');
+  }
+
+  private setupResizeHandle(sidebar: HTMLElement): void {
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'interview-coach-resize-handle';
+    sidebar.appendChild(resizeHandle);
+
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = sidebar.offsetWidth;
+      document.body.style.cursor = 'ew-resize';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+
+      const deltaX = startX - e.clientX;
+      const newWidth = startWidth + deltaX;
+
+      // Clamp width between 300px and 800px
+      const clampedWidth = Math.max(300, Math.min(800, newWidth));
+      sidebar.style.width = `${clampedWidth}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        document.body.style.cursor = '';
+      }
+    });
+  }
+
+  private setupMessageListener(): void {
+    // Listen for messages from background script
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      console.log('InterviewCoach.AI Sidebar: Received message:', message.type);
+
+      if (message.type === 'PING') {
+        // Respond to ping to confirm content script is loaded
+        sendResponse({ status: 'ready' });
+        return true;
+      }
+
+      if (message.type === 'OPEN_SIDEBAR') {
+        this.show(message.action, message.text);
+        sendResponse({ success: true });
+        return true;
+      }
+
+      return false;
+    });
+  }
+
+  private injectStyles(): void {
+    if (document.getElementById('interview-coach-sidebar-styles')) {
+      return;
+    }
+
+    const style = document.createElement('style');
+    style.id = 'interview-coach-sidebar-styles';
+    style.textContent = `
+      .interview-coach-sidebar-hidden {
+        position: fixed;
+        top: 0;
+        right: -500px;
+        width: 450px;
+        height: 100vh;
+        background: white;
+        box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+        z-index: 2147483647;
+        display: flex;
+        flex-direction: column;
+        transition: right 0.3s ease;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      .interview-coach-sidebar-visible {
+        right: 0 !important;
+      }
+
+      .interview-coach-sidebar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        flex-shrink: 0;
+      }
+
+      .interview-coach-sidebar-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      .interview-coach-logo {
+        font-size: 24px;
+      }
+
+      .interview-coach-close-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+      }
+
+      .interview-coach-close-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .interview-coach-iframe {
+        flex: 1;
+        border: none;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background: white;
+        display: block;
+      }
+
+      .interview-coach-resize-handle {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 5px;
+        height: 100%;
+        cursor: ew-resize;
+        background: transparent;
+        transition: background 0.2s;
+      }
+
+      .interview-coach-resize-handle:hover {
+        background: rgba(102, 126, 234, 0.3);
+      }
+
+      /* Don't adjust page content - overlay instead */
+      body.interview-coach-sidebar-open {
+        /* Removed margin adjustment to prevent layout issues */
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  public show(action?: string, text?: string): void {
+    if (!this.sidebar) return;
+
+    this.sidebar.classList.remove('interview-coach-sidebar-hidden');
+    this.sidebar.classList.add('interview-coach-sidebar-visible');
+    document.body.classList.add('interview-coach-sidebar-open');
+    this.isVisible = true;
+
+    // Send data to iframe if needed
+    if (action && text && this.iframe) {
+      // Wait for iframe to load
+      setTimeout(() => {
+        chrome.storage.local.set({
+          contextMenuAction: action,
+          selectedText: text,
+          timestamp: Date.now()
+        });
+      }, 500);
+    }
+
+    console.log('InterviewCoach.AI: Sidebar shown', action);
+  }
+
+  public hide(): void {
+    if (!this.sidebar) return;
+
+    this.sidebar.classList.remove('interview-coach-sidebar-visible');
+    this.sidebar.classList.add('interview-coach-sidebar-hidden');
+    document.body.classList.remove('interview-coach-sidebar-open');
+    this.isVisible = false;
+
+    console.log('InterviewCoach.AI: Sidebar hidden');
+  }
+
+  public toggle(): void {
+    if (this.isVisible) {
+      this.hide();
+    } else {
+      this.show();
+    }
+  }
 }
 
 class InterviewCoachContentScript {
@@ -18,6 +298,8 @@ class InterviewCoachContentScript {
   private readonly TYPING_DELAY = 1000; // 1 second after user stops typing
 
   constructor() {
+    // Initialize sidebar (it sets up its own listeners)
+    new InterviewCoachSidebar();
     this.init();
   }
 
@@ -647,11 +929,22 @@ class InterviewCoachContentScript {
   }
 }
 
-// Initialize the content script when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
+// Prevent multiple initializations
+if (!(window as any).__interviewCoachInitialized) {
+  (window as any).__interviewCoachInitialized = true;
+
+  console.log('InterviewCoach.AI: Initializing content script, readyState:', document.readyState);
+
+  // Initialize the content script when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('InterviewCoach.AI: DOM loaded, creating content script');
+      new InterviewCoachContentScript();
+    });
+  } else {
+    console.log('InterviewCoach.AI: DOM already loaded, creating content script immediately');
     new InterviewCoachContentScript();
-  });
+  }
 } else {
-  new InterviewCoachContentScript();
+  console.log('InterviewCoach.AI: Content script already initialized, skipping');
 }
