@@ -119,20 +119,22 @@ export class GeminiClient {
 
   /**
    * Generate content using Prompt API
+   * Optimized to reuse sessions - system prompts are embedded in the user prompt
    */
   async generateContent(prompt: string, systemPrompt?: string): Promise<string> {
     await this.ensureSession();
 
-    // If a different system prompt is provided, reinitialize
-    if (systemPrompt && systemPrompt !== this.config.systemPrompt) {
-      await this.destroySession();
-      await this.initializeSession(systemPrompt);
+    // Embed system prompt in the user prompt for better performance
+    // This avoids destroying/recreating sessions which is very slow
+    let fullPrompt = prompt;
+    if (systemPrompt) {
+      fullPrompt = `${systemPrompt}\n\n${prompt}`;
     }
 
-    const result = await this.session.prompt(prompt);
+    const result = await this.session.prompt(fullPrompt);
 
     // Update conversation history
-    this.conversationHistory.push({ role: 'user', content: prompt });
+    this.conversationHistory.push({ role: 'user', content: fullPrompt });
     this.conversationHistory.push({ role: 'assistant', content: result });
 
     return result;
@@ -140,17 +142,18 @@ export class GeminiClient {
 
   /**
    * Generate content with streaming
+   * Optimized to reuse sessions - system prompts are embedded in the user prompt
    */
   async *generateContentStreaming(prompt: string, systemPrompt?: string): AsyncGenerator<string> {
     await this.ensureSession();
 
-    // If a different system prompt is provided, reinitialize
-    if (systemPrompt && systemPrompt !== this.config.systemPrompt) {
-      await this.destroySession();
-      await this.initializeSession(systemPrompt);
+    // Embed system prompt in the user prompt for better performance
+    let fullPrompt = prompt;
+    if (systemPrompt) {
+      fullPrompt = `${systemPrompt}\n\n${prompt}`;
     }
 
-    const stream = this.session.promptStreaming(prompt);
+    const stream = this.session.promptStreaming(fullPrompt);
 
     let fullResponse = '';
     for await (const chunk of stream) {
@@ -159,7 +162,7 @@ export class GeminiClient {
     }
 
     // Update conversation history
-    this.conversationHistory.push({ role: 'user', content: prompt });
+    this.conversationHistory.push({ role: 'user', content: fullPrompt });
     this.conversationHistory.push({ role: 'assistant', content: fullResponse });
   }
 

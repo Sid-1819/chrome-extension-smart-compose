@@ -23,6 +23,25 @@ function App() {
     checkContextMenuAction();
   }, []);
 
+  // Initialize Gemini client when API becomes available
+  useEffect(() => {
+    if (availability === 'available' && !geminiClient) {
+      initializeClient();
+    }
+  }, [availability]);
+
+  // Initialize Gemini client once at startup
+  async function initializeClient() {
+    try {
+      const client = new GeminiClient();
+      await client.initializeSession();
+      setGeminiClient(client);
+      console.log('Gemini client initialized at startup');
+    } catch (error) {
+      console.log('Failed to initialize client at startup:', error);
+    }
+  }
+
   // Check if user came from context menu
   async function checkContextMenuAction() {
     try {
@@ -38,20 +57,18 @@ function App() {
           if (action === 'analyze-job-description') {
             setJobDescription(text);
             setActiveTab('interview-prep');
-            // Auto-analyze after a short delay
-            setTimeout(() => {
-              handleAnalyzeJobDescription();
-            }, 500);
+            // Auto-analyze immediately with the text
+            handleAnalyzeJobDescription(text);
           } else if (action === 'generate-questions') {
             setJobDescription(text);
             setActiveTab('interview-prep');
-            // Auto-generate after a short delay
-            setTimeout(() => {
-              handleGenerateQuestions();
-            }, 500);
+            // Auto-generate immediately with the text
+            handleGenerateQuestions(text);
           } else if (action === 'get-feedback') {
             setInputText(text);
             setActiveTab('feedback');
+            // Auto-get feedback immediately with the text
+            handleGetFeedback(text);
           } else if (action === 'improve-text') {
             setInputText(text);
             setActiveTab('improve');
@@ -111,8 +128,9 @@ function App() {
     }, 5000); // Check every 5 seconds
   }
 
-  async function handleGetFeedback() {
-    if (!inputText.trim()) {
+  async function handleGetFeedback(textOverride?: string) {
+    const text = textOverride || inputText;
+    if (!text.trim()) {
       alert('Please enter some text first!');
       return;
     }
@@ -122,7 +140,7 @@ function App() {
     setStatus('🤔 Getting AI feedback...');
 
     try {
-      // Initialize client if not already done
+      // Use existing client or initialize
       let client = geminiClient;
       if (!client) {
         client = new GeminiClient();
@@ -130,7 +148,7 @@ function App() {
         setGeminiClient(client);
       }
 
-      const feedback = await client.getInterviewFeedback(inputText);
+      const feedback = await client.getInterviewFeedback(text);
       setFeedbackResult(feedback);
       setStatus('✅ Feedback received!');
     } catch (error) {
@@ -141,8 +159,9 @@ function App() {
     }
   }
 
-  async function handleImproveText(style: 'professional' | 'casual' | 'concise') {
-    if (!inputText.trim()) {
+  async function handleImproveText(style: 'professional' | 'casual' | 'concise', textOverride?: string) {
+    const text = textOverride || inputText;
+    if (!text.trim()) {
       alert('Please enter some text first!');
       return;
     }
@@ -152,7 +171,7 @@ function App() {
     setStatus(`✍️ Improving text (${style} style)...`);
 
     try {
-      // Initialize client if not already done
+      // Use existing client or initialize
       let client = geminiClient;
       if (!client) {
         client = new GeminiClient();
@@ -160,7 +179,7 @@ function App() {
         setGeminiClient(client);
       }
 
-      const improved = await client.improveText(inputText, style);
+      const improved = await client.improveText(text, style);
       setImproveResult(improved);
       setStatus('✅ Text improved!');
     } catch (error) {
@@ -172,8 +191,9 @@ function App() {
   }
 
 
-  async function handleAnalyzeJobDescription() {
-    if (!jobDescription.trim()) {
+  async function handleAnalyzeJobDescription(textOverride?: string) {
+    const text = textOverride || jobDescription;
+    if (!text.trim()) {
       alert('Please paste a job description first!');
       return;
     }
@@ -183,6 +203,7 @@ function App() {
     setStatus('🔍 Analyzing job description...');
 
     try {
+      // Use existing client or initialize
       let client = geminiClient;
       if (!client) {
         client = new GeminiClient();
@@ -190,7 +211,7 @@ function App() {
         setGeminiClient(client);
       }
 
-      const analysis = await client.analyzeJobDescription(jobDescription);
+      const analysis = await client.analyzeJobDescription(text);
       setJdAnalysisResult(analysis);
       setStatus('✅ Job description analyzed!');
     } catch (error) {
@@ -201,8 +222,9 @@ function App() {
     }
   }
 
-  async function handleGenerateQuestions() {
-    if (!jobDescription.trim()) {
+  async function handleGenerateQuestions(textOverride?: string) {
+    const text = textOverride || jobDescription;
+    if (!text.trim()) {
       alert('Please paste a job description first!');
       return;
     }
@@ -212,6 +234,7 @@ function App() {
     setStatus('💭 Generating interview questions...');
 
     try {
+      // Use existing client or initialize
       let client = geminiClient;
       if (!client) {
         client = new GeminiClient();
@@ -219,7 +242,7 @@ function App() {
         setGeminiClient(client);
       }
 
-      const questions = await client.generateInterviewQuestions(jobDescription);
+      const questions = await client.generateInterviewQuestions(text);
       setInterviewQuestions(questions);
       setStatus('✅ Interview questions generated!');
     } catch (error) {
@@ -360,14 +383,14 @@ function App() {
                 {/* Action Buttons */}
                 <div className="grid grid-cols-2 gap-3 mb-6">
                   <button
-                    onClick={handleAnalyzeJobDescription}
+                    onClick={() => handleAnalyzeJobDescription()}
                     disabled={loading || availability !== 'available'}
                     className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                   >
                     {loading && !interviewQuestions ? '⏳ Analyzing...' : '🔍 Analyze JD'}
                   </button>
                   <button
-                    onClick={handleGenerateQuestions}
+                    onClick={() => handleGenerateQuestions()}
                     disabled={loading || availability !== 'available'}
                     className="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                   >
@@ -403,7 +426,7 @@ function App() {
                   Get AI-powered feedback on your interview responses, including analysis of clarity, structure, and communication style.
                 </p>
                 <button
-                  onClick={handleGetFeedback}
+                  onClick={() => handleGetFeedback()}
                   disabled={loading || availability !== 'available'}
                   className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                 >
