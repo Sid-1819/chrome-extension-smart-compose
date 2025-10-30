@@ -1,8 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import formidable, { Fields, Files } from 'formidable';
+import formidable, { Files } from 'formidable';
 import fs from 'fs';
-import * as pdfParse from 'pdf-parse';
 // @ts-ignore - mammoth doesn't have perfect types
 import mammoth from 'mammoth';
 
@@ -18,15 +17,35 @@ export const config = {
 
 /**
  * Parse file and extract text based on file type
+ * Uses Gemini for PDF parsing (native support) and mammoth for DOCX
  */
 async function extractTextFromFile(filePath: string, mimeType: string): Promise<string> {
   try {
-    // Handle PDF files
+    // Handle PDF files using Gemini's native PDF support
     if (mimeType === 'application/pdf' || filePath.endsWith('.pdf')) {
-      const dataBuffer = fs.readFileSync(filePath);
-      // @ts-ignore - pdf-parse types are not perfect
-      const data = await pdfParse.default(dataBuffer);
-      return data.text;
+      console.log('Using Gemini to parse PDF file...');
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+      // Read PDF file as base64
+      const fileBuffer = fs.readFileSync(filePath);
+      const base64Data = fileBuffer.toString('base64');
+
+      const prompt = 'Extract all text content from this resume/CV document. Return only the text content without any additional commentary or formatting. Preserve the structure and organization of the document.';
+
+      const result = await model.generateContent([
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType: 'application/pdf',
+            data: base64Data,
+          },
+        },
+      ]);
+
+      const response = result.response;
+      const text = response.text();
+      console.log('PDF parsed successfully using Gemini');
+      return text;
     }
 
     // Handle DOCX files
@@ -34,12 +53,14 @@ async function extractTextFromFile(filePath: string, mimeType: string): Promise<
       mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       filePath.endsWith('.docx')
     ) {
+      console.log('Parsing DOCX file...');
       const result = await mammoth.extractRawText({ path: filePath });
       return result.value;
     }
 
     // Handle plain text files
     if (mimeType.startsWith('text/') || filePath.endsWith('.txt') || filePath.endsWith('.md')) {
+      console.log('Reading plain text file...');
       return fs.readFileSync(filePath, 'utf-8');
     }
 
@@ -64,7 +85,7 @@ ${rawText}
 Return only the cleaned resume text, nothing else.`;
 
     const result = await model.generateContent(prompt);
-    const response = await result.response;
+    const response = result.response;
     return response.text();
   } catch (error) {
     // If Gemini fails, return the raw text
@@ -102,14 +123,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       keepExtensions: true,
     });
 
-    const [fields, files] = await new Promise<[Fields, Files]>((resolve, reject) => {
-      form.parse(req, (err, fields, files) => {
+    const files = await new Promise<Files>((resolve, reject) => {
+      form.parse(req, (err, _fields, files) => {
         if (err) {
           console.error('Form parsing error:', err);
           reject(err);
         } else {
           console.log('Form parsed successfully');
-          resolve([fields, files]);
+          resolve(files);
         }
       });
     });
