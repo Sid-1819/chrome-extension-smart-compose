@@ -1,12 +1,12 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import formidable, { Files } from 'formidable';
 import fs from 'fs';
 // @ts-ignore - mammoth doesn't have perfect types
 import mammoth from 'mammoth';
 
 // Initialize Gemini API
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 // Disable body parsing to handle file uploads
 export const config = {
@@ -24,26 +24,27 @@ async function extractTextFromFile(filePath: string, mimeType: string): Promise<
     // Handle PDF files using Gemini's native PDF support
     if (mimeType === 'application/pdf' || filePath.endsWith('.pdf')) {
       console.log('Using Gemini to parse PDF file...');
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
       // Read PDF file as base64
       const fileBuffer = fs.readFileSync(filePath);
       const base64Data = fileBuffer.toString('base64');
 
-      const prompt = 'Extract all text content from this resume/CV document. Return only the text content without any additional commentary or formatting. Preserve the structure and organization of the document.';
-
-      const result = await model.generateContent([
-        { text: prompt },
+      const contents = [
+        { text: 'Extract all text content from this resume/CV document. Return only the text content without any additional commentary or formatting. Preserve the structure and organization of the document.' },
         {
           inlineData: {
             mimeType: 'application/pdf',
             data: base64Data,
           },
         },
-      ]);
+      ];
 
-      const response = result.response;
-      const text = response.text();
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: contents,
+      });
+
+      const text = response.text || '';
       console.log('PDF parsed successfully using Gemini');
       return text;
     }
@@ -75,18 +76,23 @@ async function extractTextFromFile(filePath: string, mimeType: string): Promise<
  */
 async function cleanResumeText(rawText: string): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-    const prompt = `You are a resume text extraction assistant. Clean and format the following extracted resume text. Remove any formatting artifacts, fix spacing issues, and return a clean, readable version of the resume. Keep all the important information but make it well-structured and easy to read.
+    const contents = [
+      {
+        text: `You are a resume text extraction assistant. Clean and format the following extracted resume text. Remove any formatting artifacts, fix spacing issues, and return a clean, readable version of the resume. Keep all the important information but make it well-structured and easy to read.
 
 Resume text:
 ${rawText}
 
-Return only the cleaned resume text, nothing else.`;
+Return only the cleaned resume text, nothing else.`
+      }
+    ];
 
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    return response.text();
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: contents,
+    });
+
+    return response.text || rawText;
   } catch (error) {
     // If Gemini fails, return the raw text
     console.error('Gemini cleaning failed:', error);
