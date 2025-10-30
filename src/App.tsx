@@ -6,7 +6,7 @@ function App() {
   const [status, setStatus] = useState("Checking API availability...");
   const [availability, setAvailability] = useState<string>("");
   const [inputText, setInputText] = useState("");
-  const [feedbackResult, setFeedbackResult] = useState("");
+  const [_, setFeedbackResult] = useState("");
   const [improveResult, setImproveResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'interview-prep' | 'feedback' | 'improve'>('interview-prep');
@@ -16,6 +16,11 @@ function App() {
   const [jobDescription, setJobDescription] = useState("");
   const [jdAnalysisResult, setJdAnalysisResult] = useState("");
   const [interviewQuestions, setInterviewQuestions] = useState("");
+  // Resume / Cover letter states
+  const [resumeText, setResumeText] = useState("");
+  const [resumeFilename, setResumeFilename] = useState<string | null>(null);
+  const [coverLetterResult, setCoverLetterResult] = useState("");
+  const [coverLetterLoading, setCoverLetterLoading] = useState(false);
 
   // Check API availability on mount
   useEffect(() => {
@@ -258,6 +263,80 @@ function App() {
     }
   }
 
+  /**
+   * Handle resume file selection. Supports plain text (.txt, .md). For other formats
+   * the user will be prompted to paste text into the textarea fallback.
+   */
+  function handleResumeFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setResumeFilename(file.name);
+
+    const name = file.name.toLowerCase();
+    // Only read plain-text files client-side to avoid heavy dependencies
+    if (file.type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.md')) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = String(reader.result || '');
+        setResumeText(text);
+        setStatus(`Loaded resume: ${file.name}`);
+      };
+      reader.onerror = () => {
+        setStatus('Failed to read file. Please paste your resume text below.');
+      };
+      reader.readAsText(file);
+    } else {
+      // For PDFs/DOCs show guidance; user can paste text into the textarea instead
+      setStatus('File type not supported for auto-extraction. Please paste resume text into the field below.');
+      setResumeText('');
+    }
+  }
+
+  /**
+   * Create a cover letter using the job description analysis + the user's resume text.
+   * Uses the Gemini prompt API to generate, and optionally refines the result with the Summarizer API
+   * if available on the device.
+   */
+  async function handleCreateCoverLetter() {
+    if (!jdAnalysisResult.trim()) {
+      alert('Please analyze the job description first.');
+      return;
+    }
+    if (!resumeText.trim()) {
+      alert('Please upload or paste your resume text first.');
+      return;
+    }
+
+    setCoverLetterLoading(true);
+    setCoverLetterResult('');
+    setStatus('✉️ Generating cover letter...');
+
+    try {
+      let client = geminiClient;
+      if (!client) {
+        client = new GeminiClient();
+        await client.initializeSession();
+        setGeminiClient(client);
+      }
+
+  const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). Make sure you wrap up the cover letter in 250 to 300 words.`;
+
+  const userPrompt = `---\nJob Description Analysis:\n${jdAnalysisResult}\n\n---\nApplicant Resume:\n${resumeText}\n\n---\nWrite a cover letter for this candidate applying to the job described above. Reference both the job requirements and the candidate's relevant experience. Make the letter unique to this application.`;
+
+      const generated = await client.generateContent(userPrompt, systemPrompt);
+
+      setCoverLetterResult(generated);
+
+      setStatus('✅ Cover letter created!');
+    } catch (error: any) {
+      console.error('Cover letter generation failed:', error);
+      setStatus('❌ Failed to create cover letter.');
+      setCoverLetterResult(`Error: ${String(error)}`);
+    } finally {
+      setCoverLetterLoading(false);
+    }
+  }
+
   const tabs = [
     { id: 'interview-prep', label: '🎯 Interview Prep', icon: '📋' },
     { id: 'feedback', label: '💬 Answer Feedback', icon: '🎤' },
@@ -405,11 +484,60 @@ function App() {
                     <div className="text-gray-700 whitespace-pre-wrap">{interviewQuestions}</div>
                   </div>
                 )}
+
+                {/* Resume upload + Cover Letter */}
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold text-gray-900 mb-2">📎 Upload / Paste Resume</h3>
+
+                  <div className="flex items-center gap-3 mb-3">
+                    <input
+                      type="file"
+                      accept=".txt,.md,text/*"
+                      onChange={handleResumeFileChange}
+                      className=""
+                    />
+                    <span className="text-sm text-gray-500">(Plain-text files recommended)</span>
+                    {resumeFilename && (
+                      <span className="ml-2 text-sm text-gray-600">Loaded: {resumeFilename}</span>
+                    )}
+                  </div>
+
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Or paste resume text:</label>
+                  <textarea
+                    value={resumeText}
+                    onChange={(e) => setResumeText(e.target.value)}
+                    placeholder="Paste your resume or CV text here if file upload isn't supported (PDF/DOCX)."
+                    className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                  />
+
+                  <div className="mt-3 flex gap-3">
+                    <button
+                      onClick={handleCreateCoverLetter}
+                      disabled={coverLetterLoading || availability !== 'available' || !jdAnalysisResult || !resumeText}
+                      className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    >
+                      {coverLetterLoading ? '⏳ Creating cover letter...' : '✉️ Create Cover Letter'}
+                    </button>
+                    <button
+                      onClick={() => { setResumeText(''); setResumeFilename(null); setCoverLetterResult(''); }}
+                      className="bg-white border border-gray-200 text-gray-700 py-2 px-3 rounded-lg hover:bg-gray-50"
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  {coverLetterResult && (
+                    <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                      <h4 className="font-semibold mb-2">Generated Cover Letter</h4>
+                      <div className="text-gray-800 whitespace-pre-wrap">{coverLetterResult}</div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
             {/* Feedback Tab */}
-            {activeTab === 'feedback' && (
+            {/* {activeTab === 'feedback' && (
               <div>
                 <p className="text-gray-600 mb-4">
                   Get AI-powered feedback on your interview responses, including analysis of clarity, structure, and communication style.
@@ -428,7 +556,7 @@ function App() {
                   </div>
                 )}
               </div>
-            )}
+            )} */}
 
             {/* Improve Tab */}
             {activeTab === 'improve' && (
