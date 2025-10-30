@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "@vercel/node@3.3.3",
+      "maxDuration": 30
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    }
+  ],
+  "env": {
+    "GEMINI_API_KEY": "@gemini-api-key"
+  }
+}

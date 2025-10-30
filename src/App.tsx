@@ -334,31 +334,90 @@ function App() {
   }
 
   /**
-   * Handle resume file selection. Supports plain text (.txt, .md). For other formats
-   * the user will be prompted to paste text into the textarea fallback.
+   * Handle resume file selection. Supports plain text (.txt, .md) client-side.
+   * For PDF/DOCX files, sends to Vercel API for parsing.
    */
-  function handleResumeFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleResumeFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setResumeFilename(file.name);
 
     const name = file.name.toLowerCase();
+
     // Only read plain-text files client-side to avoid heavy dependencies
     if (file.type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.md')) {
       const reader = new FileReader();
       reader.onload = () => {
         const text = String(reader.result || '');
         setResumeText(text);
-        setStatus(`Loaded resume: ${file.name}`);
+        setStatus(`✅ Loaded resume: ${file.name}`);
       };
       reader.onerror = () => {
-        setStatus('Failed to read file. Please paste your resume text below.');
+        setStatus('❌ Failed to read file. Please paste your resume text below.');
       };
       reader.readAsText(file);
-    } else {
-      // For PDFs/DOCs show guidance; user can paste text into the textarea instead
-      setStatus('File type not supported for auto-extraction. Please paste resume text into the field below.');
+    }
+    // Handle PDF and DOCX files via API
+    else if (
+      file.type === 'application/pdf' ||
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      name.endsWith('.pdf') ||
+      name.endsWith('.docx')
+    ) {
+      await handleResumeAPIUpload(file);
+    }
+    else {
+      // Unsupported file type
+      setStatus('⚠️ File type not supported. Please use PDF, DOCX, TXT, or MD files, or paste text below.');
       setResumeText('');
+    }
+  }
+
+  /**
+   * Upload PDF/DOCX resume to Vercel API for parsing
+   */
+  async function handleResumeAPIUpload(file: File) {
+    setCoverLetterLoading(true);
+    setStatus('📄 Parsing resume file...');
+    setResumeText('');
+
+    try {
+      // Create FormData to send file
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Call Vercel API endpoint
+      // In development, you might need to change this to your local API URL
+      const apiUrl = import.meta.env.DEV
+        ? 'http://localhost:3000/api/parse-resume'  // Local development
+        : '/api/parse-resume';  // Production (deployed on Vercel)
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to parse resume');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.text) {
+        setResumeText(data.text);
+        setStatus(`✅ Successfully parsed ${file.name} (${data.cleanedLength} characters)`);
+      } else {
+        throw new Error('No text extracted from file');
+      }
+
+    } catch (error) {
+      console.error('Resume API upload failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setStatus(`❌ Failed to parse resume: ${errorMessage}. Please paste text manually.`);
+      setResumeText('');
+    } finally {
+      setCoverLetterLoading(false);
     }
   }
 
@@ -701,11 +760,11 @@ function App() {
                   <div className="flex items-center gap-3 mb-3">
                     <input
                       type="file"
-                      accept=".txt,.md,text/*"
+                      accept=".txt,.md,.pdf,.docx,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                       onChange={handleResumeFileChange}
                       className=""
                     />
-                    <span className="text-sm text-gray-500">(Plain-text files recommended)</span>
+                    <span className="text-sm text-gray-500">(PDF, DOCX, TXT, MD supported)</span>
                     {resumeFilename && (
                       <span className="ml-2 text-sm text-gray-600">Loaded: {resumeFilename}</span>
                     )}
