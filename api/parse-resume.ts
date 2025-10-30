@@ -13,6 +13,7 @@ export const config = {
   api: {
     bodyParser: false,
   },
+  maxDuration: 60, // Set max execution time to 60 seconds
 };
 
 /**
