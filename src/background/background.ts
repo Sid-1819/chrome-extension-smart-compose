@@ -4,10 +4,13 @@
  */
 
 interface MessagePayload {
-  type: 'TEXT_CAPTURED' | 'JOB_DESCRIPTION_SELECTED';
-  text: string;
+  type: 'TEXT_CAPTURED' | 'JOB_DESCRIPTION_SELECTED' | 'CLEAR_BADGE' | 'SHOW_NUDGE' | 'HIDE_NUDGE' | 'OPEN_SIDE_PANEL';
+  text?: string;
   url?: string;
   timestamp?: number;
+  action?: string;
+  badgeText?: string;
+  badgeTitle?: string;
 }
 
 interface StoredText {
@@ -28,7 +31,18 @@ class InterviewCoachBackground {
     console.log('InterviewCoach.AI: Background script initialized');
     this.setupMessageListener();
     this.setupContextMenus();
+    this.setupActionButton();
     await this.loadStoredTexts();
+  }
+
+  /**
+   * Set up extension icon click handler and panel behavior
+   */
+  private setupActionButton(): void {
+    // Set panel to open automatically when action icon is clicked
+    chrome.sidePanel
+      .setPanelBehavior({ openPanelOnActionClick: true })
+      .catch((error) => console.error('InterviewCoach.AI: Error setting panel behavior:', error));
   }
 
   /**
@@ -100,27 +114,77 @@ class InterviewCoachBackground {
         timestamp: Date.now()
       });
 
-      // Open extension popup (which has full API access)
-      // Note: chrome.action.openPopup() only works in response to user action
-      // So we'll use a different approach - open a new window with the extension
+      // Open side panel FIRST (must be synchronous in user gesture handler)
+      if (tab?.windowId) {
+        try {
+          await chrome.sidePanel.open({ windowId: tab.windowId });
+          console.log('InterviewCoach.AI: Side panel opened');
+        } catch (error) {
+          console.log('InterviewCoach.AI: Could not open side panel:', error);
+        }
+      }
 
-      try {
-        // Try to open popup directly (works on Chrome 99+)
-        await chrome.action.openPopup();
-        console.log('InterviewCoach.AI: Popup opened');
-      } catch (error) {
-        console.log('InterviewCoach.AI: Could not open popup, trying alternative...');
+      // Then send nudge message (async, happens after side panel is already opening)
+      if (tab?.id) {
+        let badgeText = 'Ready';
+        let badgeTitle = 'InterviewCoach.AI - Click to view';
 
-        // Alternative: Create a small notification to click the extension icon
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: chrome.runtime.getURL('icon.png'),
-          title: 'InterviewCoach.AI',
-          message: 'Click the extension icon to view results',
-          priority: 2
-        });
+        switch (info.menuItemId) {
+          case 'analyze-job-description':
+            badgeText = 'Job Analysis Ready';
+            badgeTitle = 'Job Description Analysis Ready';
+            break;
+          case 'generate-questions':
+            badgeText = 'Questions Ready';
+            badgeTitle = 'Interview Questions Ready';
+            break;
+          case 'get-feedback':
+            badgeText = 'Feedback Ready';
+            badgeTitle = 'Feedback Ready';
+            break;
+          case 'improve-text':
+            badgeText = 'Improvement Ready';
+            badgeTitle = 'Text Improvement Ready';
+            break;
+        }
+
+        // Send message to content script to show nudge badge (non-blocking)
+        this.sendNudgeMessage(tab.id, {
+          type: 'SHOW_NUDGE',
+          action: info.menuItemId as string,
+          badgeText: badgeText,
+          badgeTitle: badgeTitle
+        }).catch(err => console.log('Nudge message failed:', err));
       }
     });
+  }
+
+  /**
+   * Send nudge message to content script with retry
+   */
+  private async sendNudgeMessage(tabId: number, message: MessagePayload, retries = 3): Promise<void> {
+    for (let i = 0; i < retries; i++) {
+      try {
+        // First check if content script is ready
+        const response = await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+
+        if (response && response.status === 'ready') {
+          // Content script is ready, send the nudge message
+          await chrome.tabs.sendMessage(tabId, message);
+          console.log('InterviewCoach.AI: Nudge badge message sent');
+          return;
+        }
+      } catch (error) {
+        console.log(`InterviewCoach.AI: Content script not ready, attempt ${i + 1}/${retries}`);
+
+        if (i < retries - 1) {
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          console.log('InterviewCoach.AI: Could not connect to content script after retries');
+        }
+      }
+    }
   }
 
   /**
@@ -141,6 +205,16 @@ class InterviewCoachBackground {
             sendResponse({ success: true, message: 'Text captured successfully' });
             break;
 
+          case 'CLEAR_BADGE':
+            this.clearBadge(sender);
+            sendResponse({ success: true, message: 'Badge cleared' });
+            break;
+
+          case 'OPEN_SIDE_PANEL':
+            this.openSidePanel(sender);
+            sendResponse({ success: true, message: 'Side panel opening' });
+            break;
+
           default:
             sendResponse({ success: false, message: 'Unknown message type' });
         }
@@ -151,11 +225,56 @@ class InterviewCoachBackground {
   }
 
   /**
+   * Clear the badge notification (now handled by content script nudge)
+   */
+  private async clearBadge(sender: chrome.runtime.MessageSender): Promise<void> {
+    try {
+      // Send message to content script to hide nudge badge
+      if (sender.tab?.id) {
+        await chrome.tabs.sendMessage(sender.tab.id, {
+          type: 'HIDE_NUDGE'
+        });
+      }
+      console.log('InterviewCoach.AI: Nudge cleared');
+    } catch (error) {
+      console.error('InterviewCoach.AI: Error clearing nudge:', error);
+    }
+  }
+
+  /**
+   * Open the Chrome side panel
+   */
+  private async openSidePanel(sender: chrome.runtime.MessageSender): Promise<void> {
+    try {
+      const tab = sender.tab;
+      if (!tab) return;
+
+      // Try to open side panel with windowId first
+      if (tab.windowId) {
+        try {
+          await chrome.sidePanel.open({ windowId: tab.windowId });
+          console.log('InterviewCoach.AI: Side panel opened with windowId');
+        } catch (error) {
+          console.log('InterviewCoach.AI: Could not open side panel with windowId, trying tabId:', error);
+
+          // Fallback to tabId
+          if (tab.id) {
+            await chrome.sidePanel.open({ tabId: tab.id });
+            console.log('InterviewCoach.AI: Side panel opened with tabId');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('InterviewCoach.AI: Error opening side panel:', error);
+    }
+  }
+
+  /**
    * Handle captured text from content script
    */
   private handleTextCaptured(message: MessagePayload, _sender: chrome.runtime.MessageSender): void {
     const storedText: StoredText = {
-      text: message.text,
+      text: message.text || '',
       url: message.url || '',
       timestamp: message.timestamp || Date.now()
     };
@@ -172,7 +291,7 @@ class InterviewCoachBackground {
     this.saveTextsToStorage();
 
     console.log('InterviewCoach.AI: Text captured and stored', {
-      textLength: message.text.length,
+      textLength: message.text?.length || 0,
       url: message.url,
       totalStored: this.recentTexts.length
     });

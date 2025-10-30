@@ -3,23 +3,32 @@
   "name": "InterviewCoach.AI",
   "version": "1.0.0",
   "description": "AI-powered interview preparation assistant with job description analysis and question generation",
-  "permissions": ["storage", "activeTab", "scripting", "notifications", "contextMenus"],
+  "permissions": ["storage", "activeTab", "scripting", "notifications", "contextMenus", "sidePanel"],
   "host_permissions": [
     "https://*/*",
     "http://*/*"
   ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
-    "default_popup": "index.html"
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "index.html"
   },
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://*/*",
-        "http://*/*"
-      ],
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_end",
       "all_frames": false
