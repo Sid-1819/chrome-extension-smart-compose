@@ -27,6 +27,9 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [mockFeedback, setMockFeedback] = useState("");
   const [mockLoading, setMockLoading] = useState(false);
+  const [questionsList, setQuestionsList] = useState<string[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(-1);
+  const [customQuestion, setCustomQuestion] = useState("");
 
   // Check API availability on mount
   useEffect(() => {
@@ -41,6 +44,14 @@ function App() {
     }
   }, [availability]);
 
+  // Parse interview questions into a list when they're generated
+  useEffect(() => {
+    if (interviewQuestions) {
+      const parsed = parseQuestions(interviewQuestions);
+      setQuestionsList(parsed);
+    }
+  }, [interviewQuestions]);
+
   // Initialize Gemini client once at startup
   async function initializeClient() {
     try {
@@ -50,6 +61,59 @@ function App() {
       console.log('Gemini client initialized at startup');
     } catch (error) {
       console.log('Failed to initialize client at startup:', error);
+    }
+  }
+
+  // Parse questions from the generated interview questions string
+  function parseQuestions(questionsText: string): string[] {
+    // Split by numbered lines (1., 2., 3., etc.) or by newlines
+    const lines = questionsText.split('\n').filter(line => line.trim());
+    const questions: string[] = [];
+
+    for (const line of lines) {
+      // Remove numbering like "1.", "2.", etc.
+      const cleaned = line.replace(/^\d+\.\s*/, '').trim();
+      // Only add non-empty lines that look like questions or statements
+      if (cleaned.length > 10) {
+        questions.push(cleaned);
+      }
+    }
+
+    return questions.length > 0 ? questions : [questionsText]; // Fallback to full text if parsing fails
+  }
+
+  // Add a custom question to the list
+  function handleAddCustomQuestion() {
+    if (!customQuestion.trim()) {
+      alert('Please enter a question first!');
+      return;
+    }
+
+    setQuestionsList(prev => [...prev, customQuestion.trim()]);
+    setCustomQuestion('');
+    setStatus('✅ Custom question added!');
+  }
+
+  // Select a question to answer
+  function handleSelectQuestion(index: number) {
+    setCurrentQuestionIndex(index);
+    setMockQuestion(questionsList[index]);
+    setMockAnswer('');
+    setMockFeedback('');
+    setStatus(`📝 Selected question ${index + 1} of ${questionsList.length}`);
+  }
+
+  // Navigate to next question
+  function handleNextQuestion() {
+    if (currentQuestionIndex < questionsList.length - 1) {
+      handleSelectQuestion(currentQuestionIndex + 1);
+    }
+  }
+
+  // Navigate to previous question
+  function handlePreviousQuestion() {
+    if (currentQuestionIndex > 0) {
+      handleSelectQuestion(currentQuestionIndex - 1);
     }
   }
 
@@ -486,11 +550,11 @@ function App() {
   const isInSidebar = window.self !== window.top;
 
   return (
-    <div className={`${isInSidebar ? 'min-h-full' : 'min-h-screen'} bg-gradient-to-br from-purple-50 to-blue-50 p-6`}>
+    <div className={`${isInSidebar ? 'min-h-full' : 'min-h-screen'} bg-blue-50 p-6`}>
       <div className={isInSidebar ? 'max-w-full' : 'max-w-4xl mx-auto'}>
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-4xl font-bold text-purple-600 mb-2">
             InterviewCoach.AI
           </h1>
           <p className="text-gray-600">AI-Powered Interview Prep • On-Device • No API Key Needed</p>
@@ -551,7 +615,7 @@ function App() {
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
+                    ? 'bg-purple-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
@@ -592,14 +656,14 @@ function App() {
                   <button
                     onClick={() => handleAnalyzeJobDescription()}
                     disabled={loading || availability !== 'available'}
-                    className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    className="bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {loading && !interviewQuestions ? '⏳ Analyzing...' : '🔍 Analyze JD'}
                   </button>
                   <button
                     onClick={() => handleGenerateQuestions()}
                     disabled={loading || availability !== 'available'}
-                    className="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    className="bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {loading && interviewQuestions !== jdAnalysisResult ? '⏳ Generating...' : '💭 Generate Questions'}
                   </button>
@@ -621,6 +685,12 @@ function App() {
                       💭 Likely Interview Questions
                     </h3>
                     <div className="text-gray-700 whitespace-pre-wrap">{interviewQuestions}</div>
+                    <button
+                      onClick={() => setActiveTab('mock-interview')}
+                      className="mt-4 w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      🎤 Start Mock Interview with These Questions
+                    </button>
                   </div>
                 )}
 
@@ -653,7 +723,7 @@ function App() {
                     <button
                       onClick={handleCreateCoverLetter}
                       disabled={coverLetterLoading || availability !== 'available' || !jdAnalysisResult || !resumeText}
-                      className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                      className="bg-indigo-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {coverLetterLoading ? '⏳ Creating cover letter...' : '✉️ Create Cover Letter'}
                     </button>
@@ -684,7 +754,7 @@ function App() {
                 <button
                   onClick={() => handleGetFeedback()}
                   disabled={loading || availability !== 'available'}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  className="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {loading ? '⏳ Processing...' : '🎯 Get AI Feedback'}
                 </button>
@@ -711,19 +781,100 @@ function App() {
                   </p>
                 </div>
 
-                {/* Interview Question Input */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Interview Question:
-                  </label>
-                  <textarea
-                    value={mockQuestion}
-                    onChange={(e) => setMockQuestion(e.target.value)}
-                    placeholder="Enter the interview question you want to practice..."
-                    className="w-full h-24 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                    disabled={availability !== 'available'}
-                  />
+                {/* Questions List Section */}
+                {questionsList.length > 0 && (
+                  <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
+                      📝 Generated Interview Questions ({questionsList.length})
+                    </h3>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {questionsList.map((question, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleSelectQuestion(index)}
+                          className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                            currentQuestionIndex === index
+                              ? 'bg-purple-600 text-white border-purple-700'
+                              : 'bg-white text-gray-700 border-gray-200 hover:bg-purple-100'
+                          }`}
+                        >
+                          <span className="font-medium">Q{index + 1}:</span> {question}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Add Custom Question Section */}
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    ➕ Add Custom Question
+                  </h3>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customQuestion}
+                      onChange={(e) => setCustomQuestion(e.target.value)}
+                      placeholder="Enter your own interview question..."
+                      className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleAddCustomQuestion();
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={handleAddCustomQuestion}
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
                 </div>
+
+                {/* Current Question Display */}
+                {currentQuestionIndex >= 0 && (
+                  <div className="mb-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-semibold text-blue-900">
+                        Question {currentQuestionIndex + 1} of {questionsList.length}
+                      </h3>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handlePreviousQuestion}
+                          disabled={currentQuestionIndex === 0}
+                          className="px-3 py-1 text-sm bg-white rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          ← Previous
+                        </button>
+                        <button
+                          onClick={handleNextQuestion}
+                          disabled={currentQuestionIndex === questionsList.length - 1}
+                          className="px-3 py-1 text-sm bg-white rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-gray-800 text-lg">{mockQuestion}</p>
+                  </div>
+                )}
+
+                {/* Fallback: Manual Question Input (if no questions selected) */}
+                {currentQuestionIndex < 0 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Or Enter Question Manually:
+                    </label>
+                    <textarea
+                      value={mockQuestion}
+                      onChange={(e) => setMockQuestion(e.target.value)}
+                      placeholder="Enter the interview question you want to practice..."
+                      className="w-full h-24 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                      disabled={availability !== 'available'}
+                    />
+                  </div>
+                )}
 
                 {/* Answer Input with Voice Support */}
                 <div className="mb-4">
@@ -748,14 +899,14 @@ function App() {
                     <button
                       onClick={startVoiceRecording}
                       disabled={availability !== 'available'}
-                      className="bg-gradient-to-r from-red-600 to-pink-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-2"
+                      className="bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                     >
                       🎤 Start Voice Recording
                     </button>
                   ) : (
                     <button
                       onClick={stopVoiceRecording}
-                      className="bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2 animate-pulse"
+                      className="bg-gray-600 text-white py-3 rounded-lg font-medium hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 animate-pulse"
                     >
                       ⏹️ Stop Recording
                     </button>
@@ -773,14 +924,14 @@ function App() {
                 <button
                   onClick={handleEvaluateMockAnswer}
                   disabled={mockLoading || availability !== 'available' || isRecording || !mockQuestion.trim() || !mockAnswer.trim()}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  className="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {mockLoading ? '⏳ Evaluating...' : '🎯 Get AI Feedback & Rating'}
                 </button>
 
                 {/* Feedback Result */}
                 {mockFeedback && (
-                  <div className="mt-6 p-5 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200">
+                  <div className="mt-6 p-5 bg-purple-50 rounded-lg border-2 border-purple-200">
                     <h3 className="font-semibold text-purple-900 mb-3 text-lg flex items-center gap-2">
                       📊 AI Evaluation & Feedback
                     </h3>
