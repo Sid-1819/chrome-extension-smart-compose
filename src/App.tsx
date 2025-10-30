@@ -9,7 +9,7 @@ function App() {
   const [_, setFeedbackResult] = useState("");
   const [improveResult, setImproveResult] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'interview-prep' | 'feedback' | 'improve'>('interview-prep');
+  const [activeTab, setActiveTab] = useState<'interview-prep' | 'feedback' | 'improve' | 'mock-interview'>('interview-prep');
   const [geminiClient, setGeminiClient] = useState<GeminiClient | null>(null);
 
   // Interview Prep states
@@ -21,6 +21,12 @@ function App() {
   const [resumeFilename, setResumeFilename] = useState<string | null>(null);
   const [coverLetterResult, setCoverLetterResult] = useState("");
   const [coverLetterLoading, setCoverLetterLoading] = useState(false);
+  // Mock Interview states
+  const [mockQuestion, setMockQuestion] = useState("");
+  const [mockAnswer, setMockAnswer] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [mockFeedback, setMockFeedback] = useState("");
+  const [mockLoading, setMockLoading] = useState(false);
 
   // Check API availability on mount
   useEffect(() => {
@@ -337,8 +343,141 @@ function App() {
     }
   }
 
+  // Voice recording functionality
+  async function startVoiceRecording() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Speech recognition is not supported in your browser. Please use Chrome.');
+      return;
+    }
+
+    try {
+      // Request microphone permission first
+      setStatus('🎤 Requesting microphone permission...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Stop the stream immediately - we just needed permission
+      stream.getTracks().forEach(track => track.stop());
+
+      // Now start speech recognition
+      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      const recognition = new SpeechRecognition();
+
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+        setStatus('🎤 Recording... Speak your answer');
+      };
+
+      recognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        let finalTranscript = mockAnswer;
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        setMockAnswer(finalTranscript + interimTranscript);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setIsRecording(false);
+
+        let errorMessage = '❌ Speech recognition error';
+        if (event.error === 'not-allowed') {
+          errorMessage = '❌ Microphone permission denied. Please allow microphone access in your browser settings.';
+        } else if (event.error === 'no-speech') {
+          errorMessage = '⚠️ No speech detected. Please try again.';
+        } else if (event.error === 'network') {
+          errorMessage = '❌ Network error. Please check your connection.';
+        } else {
+          errorMessage = `❌ Speech recognition error: ${event.error}`;
+        }
+
+        setStatus(errorMessage);
+        alert(errorMessage);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+        setStatus('✅ Recording stopped');
+      };
+
+      // Store recognition instance for stopping
+      (window as any).currentRecognition = recognition;
+      recognition.start();
+
+    } catch (error: any) {
+      console.error('Microphone permission error:', error);
+      setIsRecording(false);
+
+      let errorMessage = '❌ Could not access microphone';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = '❌ Microphone permission denied. Please allow microphone access in your browser settings and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = '❌ No microphone found. Please connect a microphone and try again.';
+      } else {
+        errorMessage = `❌ Microphone error: ${error.message}`;
+      }
+
+      setStatus(errorMessage);
+      alert(errorMessage);
+    }
+  }
+
+  function stopVoiceRecording() {
+    const recognition = (window as any).currentRecognition;
+    if (recognition) {
+      recognition.stop();
+      setIsRecording(false);
+    }
+  }
+
+  async function handleEvaluateMockAnswer() {
+    if (!mockQuestion.trim()) {
+      alert('Please enter an interview question first!');
+      return;
+    }
+    if (!mockAnswer.trim()) {
+      alert('Please provide your answer (voice or text)!');
+      return;
+    }
+
+    setMockLoading(true);
+    setMockFeedback('');
+    setStatus('🤔 Evaluating your answer...');
+
+    try {
+      let client = geminiClient;
+      if (!client) {
+        client = new GeminiClient();
+        await client.initializeSession();
+        setGeminiClient(client);
+      }
+
+      const evaluation = await client.evaluateMockInterviewAnswer(mockQuestion, mockAnswer);
+      setMockFeedback(evaluation);
+      setStatus('✅ Evaluation complete!');
+    } catch (error: any) {
+      console.error('Mock interview evaluation failed:', error);
+      setStatus('❌ Failed to evaluate answer.');
+      setMockFeedback(`Error: ${String(error)}`);
+    } finally {
+      setMockLoading(false);
+    }
+  }
+
   const tabs = [
     { id: 'interview-prep', label: '🎯 Interview Prep', icon: '📋' },
+    { id: 'mock-interview', label: '🎤 Mock Interview', icon: '🎙️' },
     { id: 'feedback', label: '💬 Answer Feedback', icon: '🎤' },
     { id: 'improve', label: '✍️ Improve Text', icon: '✨' }
   ] as const;
@@ -557,6 +696,99 @@ function App() {
                 )}
               </div>
             )} */}
+
+            {/* Mock Interview Tab */}
+            {activeTab === 'mock-interview' && (
+              <div>
+                <p className="text-gray-600 mb-4">
+                  Practice interview questions and get AI-powered feedback with ratings. Answer using voice or text.
+                </p>
+
+                {/* Microphone Permission Info */}
+                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm text-blue-800">
+                    🎤 <strong>Voice Input:</strong> Click "Start Voice Recording" to allow microphone access. You'll be prompted for permission on first use.
+                  </p>
+                </div>
+
+                {/* Interview Question Input */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Interview Question:
+                  </label>
+                  <textarea
+                    value={mockQuestion}
+                    onChange={(e) => setMockQuestion(e.target.value)}
+                    placeholder="Enter the interview question you want to practice..."
+                    className="w-full h-24 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    disabled={availability !== 'available'}
+                  />
+                </div>
+
+                {/* Answer Input with Voice Support */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Your Answer:
+                  </label>
+                  <textarea
+                    value={mockAnswer}
+                    onChange={(e) => setMockAnswer(e.target.value)}
+                    placeholder="Type your answer or use voice input..."
+                    className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    disabled={availability !== 'available' || isRecording}
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    {mockAnswer.length} characters
+                  </p>
+                </div>
+
+                {/* Voice Recording Controls */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  {!isRecording ? (
+                    <button
+                      onClick={startVoiceRecording}
+                      disabled={availability !== 'available'}
+                      className="bg-gradient-to-r from-red-600 to-pink-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-2"
+                    >
+                      🎤 Start Voice Recording
+                    </button>
+                  ) : (
+                    <button
+                      onClick={stopVoiceRecording}
+                      className="bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2 animate-pulse"
+                    >
+                      ⏹️ Stop Recording
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setMockAnswer('')}
+                    disabled={isRecording || !mockAnswer}
+                    className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    🗑️ Clear Answer
+                  </button>
+                </div>
+
+                {/* Evaluate Button */}
+                <button
+                  onClick={handleEvaluateMockAnswer}
+                  disabled={mockLoading || availability !== 'available' || isRecording || !mockQuestion.trim() || !mockAnswer.trim()}
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                >
+                  {mockLoading ? '⏳ Evaluating...' : '🎯 Get AI Feedback & Rating'}
+                </button>
+
+                {/* Feedback Result */}
+                {mockFeedback && (
+                  <div className="mt-6 p-5 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200">
+                    <h3 className="font-semibold text-purple-900 mb-3 text-lg flex items-center gap-2">
+                      📊 AI Evaluation & Feedback
+                    </h3>
+                    <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">{mockFeedback}</div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Improve Tab */}
             {activeTab === 'improve' && (

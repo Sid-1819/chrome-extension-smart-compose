@@ -565,6 +565,63 @@ Email draft:`;
 
     return this.generateContent(prompt, systemPrompt);
   }
+
+  /**
+   * Evaluate mock interview answer with detailed feedback and rating
+   */
+  async evaluateMockInterviewAnswer(question: string, answer: string): Promise<string> {
+    const systemPrompt = `You are an expert interview coach providing detailed, actionable feedback on mock interview answers.
+Evaluate the answer holistically considering content quality, structure, clarity, and relevance.
+Provide a rating out of 10 and specific, constructive feedback.`;
+
+    const prompt = `Evaluate this mock interview answer:
+
+**Question:** "${question}"
+
+**Answer:** "${answer}"
+
+Format your evaluation EXACTLY like this:
+
+**📊 Rating: X/10**
+[One sentence explaining the overall rating]
+
+**✅ Strengths**
+• [Specific strength 1]
+• [Specific strength 2]
+• [Specific strength 3 if applicable]
+
+**⚠️ Areas for Improvement**
+• [Specific area 1 with actionable advice]
+• [Specific area 2 with actionable advice]
+• [Specific area 3 if applicable]
+
+**💡 Key Takeaways**
+• [Main lesson or improvement focus]
+• [Additional tip for next time]
+
+**🎯 Suggested Enhancement** (if rating < 7/10)
+[Provide a brief example of how to improve 1-2 key sentences from the answer]
+
+EVALUATION CRITERIA:
+- Content Relevance (30%): Does it answer the question directly?
+- Structure & Clarity (25%): Is it well-organized (e.g., STAR method for behavioral)?
+- Specificity (20%): Are there concrete examples and details?
+- Communication (15%): Is it clear, professional, and confident?
+- Impact (10%): Does it demonstrate value and results?
+
+RATING SCALE:
+- 9-10: Excellent answer, interview-ready
+- 7-8: Good answer with minor improvements needed
+- 5-6: Adequate but needs significant work
+- 3-4: Weak answer, missing key elements
+- 1-2: Poor answer, needs complete rework
+
+Be honest, specific, and constructive. Focus on actionable improvements.
+
+Provide your evaluation:`;
+
+    return this.generateContent(prompt, systemPrompt);
+  }
 }
 
 /**
