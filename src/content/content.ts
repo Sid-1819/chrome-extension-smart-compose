@@ -6,11 +6,13 @@
  */
 
 interface MessagePayload {
-  type: 'TEXT_CAPTURED' | 'REQUEST_FEEDBACK' | 'OPEN_SIDEBAR';
-  text: string;
-  url: string;
-  timestamp: number;
+  type: 'TEXT_CAPTURED' | 'REQUEST_FEEDBACK' | 'OPEN_SIDEBAR' | 'SHOW_NUDGE' | 'HIDE_NUDGE' | 'PING';
+  text?: string;
+  url?: string;
+  timestamp?: number;
   action?: string;
+  badgeText?: string;
+  badgeTitle?: string;
 }
 
 /**
@@ -291,23 +293,254 @@ class InterviewCoachSidebar {
   }
 }
 
+/**
+ * Nudge Badge for Context Menu Actions
+ */
+class NudgeBadge {
+  private nudge: HTMLElement | null = null;
+  private isVisible: boolean = false;
+
+  constructor() {
+    this.createNudge();
+    console.log('InterviewCoach.AI: Nudge badge initialized');
+  }
+
+  private createNudge(): void {
+    // Check if nudge already exists
+    const existing = document.getElementById('interview-coach-nudge');
+    if (existing) {
+      this.nudge = existing;
+      return;
+    }
+
+    // Create nudge container
+    const nudge = document.createElement('div');
+    nudge.id = 'interview-coach-nudge';
+    nudge.className = 'interview-coach-nudge-hidden';
+    nudge.innerHTML = `
+      <div class="nudge-icon">🎯</div>
+      <div class="nudge-content">
+        <div class="nudge-title"></div>
+        <div class="nudge-subtitle">Click to view</div>
+      </div>
+    `;
+
+    // Add styles
+    this.injectStyles();
+
+    // Add click handler
+    nudge.addEventListener('click', () => this.handleClick());
+
+    // Add to page
+    document.body.appendChild(nudge);
+    this.nudge = nudge;
+
+    console.log('InterviewCoach.AI: Nudge badge created');
+  }
+
+  private injectStyles(): void {
+    if (document.getElementById('interview-coach-nudge-styles')) {
+      return;
+    }
+
+    const style = document.createElement('style');
+    style.id = 'interview-coach-nudge-styles';
+    style.textContent = `
+      #interview-coach-nudge {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 16px 20px;
+        border-radius: 16px;
+        cursor: pointer;
+        z-index: 2147483646;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.5);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        user-select: none;
+        min-width: 280px;
+        max-width: 350px;
+      }
+
+      #interview-coach-nudge.show {
+        display: flex;
+        animation: nudgeSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      #interview-coach-nudge:hover {
+        transform: translateY(-4px) scale(1.02);
+        box-shadow: 0 12px 32px rgba(102, 126, 234, 0.7);
+      }
+
+      #interview-coach-nudge:active {
+        transform: translateY(-2px) scale(1.01);
+      }
+
+      .interview-coach-nudge-hidden {
+        display: none !important;
+      }
+
+      .nudge-icon {
+        font-size: 32px;
+        line-height: 1;
+        flex-shrink: 0;
+        animation: nudgePulse 2s ease-in-out infinite;
+      }
+
+      .nudge-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .nudge-title {
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+
+      .nudge-subtitle {
+        font-size: 13px;
+        opacity: 0.9;
+        font-weight: 400;
+      }
+
+      @keyframes nudgeSlideIn {
+        0% {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+        60% {
+          transform: translateX(-10px);
+        }
+        100% {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+
+      @keyframes nudgePulse {
+        0%, 100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.1);
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  public show(badgeText: string, badgeTitle: string): void {
+    if (!this.nudge) return;
+
+    // Update content
+    const titleElement = this.nudge.querySelector('.nudge-title');
+    if (titleElement) {
+      titleElement.textContent = badgeText;
+    }
+
+    // Set title attribute for tooltip
+    this.nudge.setAttribute('title', badgeTitle);
+
+    // Show nudge
+    this.nudge.classList.remove('interview-coach-nudge-hidden');
+    this.nudge.classList.add('show');
+    this.isVisible = true;
+
+    console.log('InterviewCoach.AI: Nudge badge shown -', badgeText);
+
+    // Auto-hide after 10 seconds
+    setTimeout(() => {
+      this.hide();
+    }, 10000);
+  }
+
+  public hide(): void {
+    if (!this.nudge) return;
+
+    this.nudge.classList.remove('show');
+    this.nudge.classList.add('interview-coach-nudge-hidden');
+    this.isVisible = false;
+
+    console.log('InterviewCoach.AI: Nudge badge hidden');
+  }
+
+  private async handleClick(): Promise<void> {
+    console.log('InterviewCoach.AI: Nudge badge clicked');
+
+    // Send message to background to open Chrome side panel
+    try {
+      await chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' });
+      console.log('InterviewCoach.AI: Side panel open request sent');
+    } catch (error) {
+      console.error('InterviewCoach.AI: Error opening side panel:', error);
+    }
+
+    // Hide nudge
+    this.hide();
+  }
+
+  public isShowing(): boolean {
+    return this.isVisible;
+  }
+}
+
 class InterviewCoachContentScript {
   private lastCapturedText: string = '';
   private feedbackIcon: HTMLElement | null = null;
   private typingTimer: number | null = null;
   private readonly TYPING_DELAY = 1000; // 1 second after user stops typing
+  private nudgeBadge: NudgeBadge;
 
   constructor() {
-    // Initialize sidebar (it sets up its own listeners)
+    // Initialize sidebar (it sets up its own listeners for OPEN_SIDEBAR messages)
     new InterviewCoachSidebar();
+
+    // Initialize nudge badge
+    this.nudgeBadge = new NudgeBadge();
+
     this.init();
   }
 
   private init(): void {
     console.log('InterviewCoach.AI: Content script initialized');
+    this.setupNudgeMessageListener();
     this.createFloatingIcon();
     this.attachInputListeners();
     this.detectPageType();
+  }
+
+  /**
+   * Set up message listener for nudge badge
+   */
+  private setupNudgeMessageListener(): void {
+    chrome.runtime.onMessage.addListener((message: MessagePayload, _sender, sendResponse) => {
+      if (message.type === 'SHOW_NUDGE') {
+        console.log('InterviewCoach.AI: Received SHOW_NUDGE message', message);
+        if (message.badgeText && message.badgeTitle) {
+          this.nudgeBadge.show(message.badgeText, message.badgeTitle);
+        }
+        sendResponse({ success: true });
+        return true;
+      }
+
+      if (message.type === 'HIDE_NUDGE') {
+        console.log('InterviewCoach.AI: Received HIDE_NUDGE message');
+        this.nudgeBadge.hide();
+        sendResponse({ success: true });
+        return true;
+      }
+
+      return false;
+    });
   }
 
   /**

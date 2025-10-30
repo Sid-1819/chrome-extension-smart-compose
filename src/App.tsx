@@ -76,6 +76,11 @@ function App() {
 
           // Clear the action after processing
           chrome.storage.local.remove(['contextMenuAction', 'selectedText', 'timestamp']);
+
+          // Clear the badge notification
+          chrome.runtime.sendMessage({ type: 'CLEAR_BADGE' }).catch(err =>
+            console.log('Could not clear badge:', err)
+          );
         }
       }
     } catch (error) {
