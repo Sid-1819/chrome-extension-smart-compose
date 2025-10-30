@@ -132,18 +132,13 @@ class InterviewCoachSidebar {
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       console.log('InterviewCoach.AI Sidebar: Received message:', message.type);
 
-      if (message.type === 'PING') {
-        // Respond to ping to confirm content script is loaded
-        sendResponse({ status: 'ready' });
-        return true;
-      }
-
       if (message.type === 'OPEN_SIDEBAR') {
         this.show(message.action, message.text);
         sendResponse({ success: true });
         return true;
       }
 
+      // Don't handle other messages - let other listeners handle them
       return false;
     });
   }
@@ -519,12 +514,21 @@ class InterviewCoachContentScript {
   }
 
   /**
-   * Set up message listener for nudge badge
+   * Set up message listener for nudge badge and other content script messages
    */
   private setupNudgeMessageListener(): void {
     chrome.runtime.onMessage.addListener((message: MessagePayload, _sender, sendResponse) => {
+      console.log('InterviewCoach.AI Content: Received message:', message.type);
+
+      // Handle PING to confirm content script is ready
+      if (message.type === 'PING') {
+        sendResponse({ status: 'ready' });
+        return true;
+      }
+
+      // Handle SHOW_NUDGE
       if (message.type === 'SHOW_NUDGE') {
-        console.log('InterviewCoach.AI: Received SHOW_NUDGE message', message);
+        console.log('InterviewCoach.AI: Showing nudge badge', message);
         if (message.badgeText && message.badgeTitle) {
           this.nudgeBadge.show(message.badgeText, message.badgeTitle);
         }
@@ -532,13 +536,15 @@ class InterviewCoachContentScript {
         return true;
       }
 
+      // Handle HIDE_NUDGE
       if (message.type === 'HIDE_NUDGE') {
-        console.log('InterviewCoach.AI: Received HIDE_NUDGE message');
+        console.log('InterviewCoach.AI: Hiding nudge badge');
         this.nudgeBadge.hide();
         sendResponse({ success: true });
         return true;
       }
 
+      // Don't handle other messages - let other listeners handle them
       return false;
     });
   }

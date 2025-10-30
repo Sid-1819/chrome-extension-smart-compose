@@ -342,22 +342,6 @@ function App() {
             ))}
           </div>
 
-          {/* Input Area */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Enter your text:
-            </label>
-            <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Type or paste your text here..."
-              className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-              disabled={availability !== 'available'}
-            />
-            <p className="text-sm text-gray-500 mt-1">
-              {inputText.length} characters
-            </p>
-          </div>
 
           {/* Tab Content */}
           <div className="space-y-4">

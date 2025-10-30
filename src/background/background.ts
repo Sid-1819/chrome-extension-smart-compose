@@ -114,7 +114,17 @@ class InterviewCoachBackground {
         timestamp: Date.now()
       });
 
-      // Send message to content script to show nudge badge
+      // Open side panel FIRST (must be synchronous in user gesture handler)
+      if (tab?.windowId) {
+        try {
+          await chrome.sidePanel.open({ windowId: tab.windowId });
+          console.log('InterviewCoach.AI: Side panel opened');
+        } catch (error) {
+          console.log('InterviewCoach.AI: Could not open side panel:', error);
+        }
+      }
+
+      // Then send nudge message (async, happens after side panel is already opening)
       if (tab?.id) {
         let badgeText = 'Ready';
         let badgeTitle = 'InterviewCoach.AI - Click to view';
@@ -138,20 +148,43 @@ class InterviewCoachBackground {
             break;
         }
 
-        // Send message to content script to show nudge badge
-        try {
-          await chrome.tabs.sendMessage(tab.id, {
-            type: 'SHOW_NUDGE',
-            action: info.menuItemId as string,
-            badgeText: badgeText,
-            badgeTitle: badgeTitle
-          });
-          console.log('InterviewCoach.AI: Nudge badge message sent');
-        } catch (error) {
-          console.log('InterviewCoach.AI: Could not send nudge message to content script:', error);
-        }
+        // Send message to content script to show nudge badge (non-blocking)
+        this.sendNudgeMessage(tab.id, {
+          type: 'SHOW_NUDGE',
+          action: info.menuItemId as string,
+          badgeText: badgeText,
+          badgeTitle: badgeTitle
+        }).catch(err => console.log('Nudge message failed:', err));
       }
     });
+  }
+
+  /**
+   * Send nudge message to content script with retry
+   */
+  private async sendNudgeMessage(tabId: number, message: MessagePayload, retries = 3): Promise<void> {
+    for (let i = 0; i < retries; i++) {
+      try {
+        // First check if content script is ready
+        const response = await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+
+        if (response && response.status === 'ready') {
+          // Content script is ready, send the nudge message
+          await chrome.tabs.sendMessage(tabId, message);
+          console.log('InterviewCoach.AI: Nudge badge message sent');
+          return;
+        }
+      } catch (error) {
+        console.log(`InterviewCoach.AI: Content script not ready, attempt ${i + 1}/${retries}`);
+
+        if (i < retries - 1) {
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          console.log('InterviewCoach.AI: Could not connect to content script after retries');
+        }
+      }
+    }
   }
 
   /**
