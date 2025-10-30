@@ -77,17 +77,25 @@ Return only the cleaned resume text, nothing else.`;
  * Main handler for resume parsing
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  console.log('Resume parsing API called');
+
   // Only allow POST requests
   if (req.method !== 'POST') {
+    console.log('Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   // Check if API key is configured
   if (!process.env.GEMINI_API_KEY) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+    console.error('GEMINI_API_KEY not configured');
+    return res.status(500).json({ error: 'GEMINI_API_KEY not configured. Please set it in Vercel environment variables.' });
   }
 
+  console.log('API key is configured');
+
   try {
+    console.log('Parsing form data...');
+
     // Parse the multipart form data
     const form = formidable({
       maxFileSize: 10 * 1024 * 1024, // 10MB limit
@@ -96,22 +104,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const [fields, files] = await new Promise<[Fields, Files]>((resolve, reject) => {
       form.parse(req, (err, fields, files) => {
-        if (err) reject(err);
-        else resolve([fields, files]);
+        if (err) {
+          console.error('Form parsing error:', err);
+          reject(err);
+        } else {
+          console.log('Form parsed successfully');
+          resolve([fields, files]);
+        }
       });
     });
 
     // Get the uploaded file
     const fileArray = files.file;
     if (!fileArray || fileArray.length === 0) {
+      console.error('No file uploaded');
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
     const file = Array.isArray(fileArray) ? fileArray[0] : fileArray;
+    console.log('File received:', file.originalFilename, 'Size:', file.size, 'Type:', file.mimetype);
 
     if (!file.filepath) {
+      console.error('Invalid file upload - no filepath');
       return res.status(400).json({ error: 'Invalid file upload' });
     }
+
+    console.log('Extracting text from file...');
 
     // Extract text from the file
     const extractedText = await extractTextFromFile(
@@ -119,21 +137,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       file.mimetype || ''
     );
 
+    console.log('Text extracted, length:', extractedText.length);
+
     if (!extractedText.trim()) {
+      console.error('No text could be extracted from the file');
       return res.status(400).json({ error: 'No text could be extracted from the file' });
     }
+
+    console.log('Cleaning text with Gemini...');
 
     // Optionally clean the text with Gemini
     const cleanText = await cleanResumeText(extractedText);
 
+    console.log('Text cleaned, length:', cleanText.length);
+
     // Clean up the uploaded file
     try {
       fs.unlinkSync(file.filepath);
+      console.log('Temp file cleaned up');
     } catch (cleanupError) {
       console.error('Failed to cleanup temp file:', cleanupError);
     }
 
     // Return the extracted and cleaned text
+    console.log('Returning success response');
     return res.status(200).json({
       success: true,
       text: cleanText,
@@ -144,8 +171,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   } catch (error) {
     console.error('Resume parsing error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to parse resume';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    console.error('Error details:', { message: errorMessage, stack: errorStack });
+
     return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to parse resume',
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? errorStack : undefined,
     });
   }
 }

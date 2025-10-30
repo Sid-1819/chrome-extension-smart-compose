@@ -386,19 +386,23 @@ function App() {
       const formData = new FormData();
       formData.append('file', file);
 
-      // Call Vercel API endpoint
-      // In development, you might need to change this to your local API URL
-      const apiUrl = import.meta.env.DEV
-        ? 'http://localhost:3000/api/parse-resume'  // Local development
-        : '/api/parse-resume';  // Production (deployed on Vercel)
+      // Determine API URL
+      // For Chrome extensions, we need to use the full Vercel URL since relative paths don't work
+      // Default to the deployed Vercel URL, but allow override via environment variable
+      const PRODUCTION_API_URL = import.meta.env.VITE_API_URL || 'https://interview-coach-ai-9vgs.vercel.app/api/parse-resume';
+      const apiUrl = PRODUCTION_API_URL;
+
+      console.log('Attempting to parse resume using API:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'POST',
         body: formData,
+        // Add timeout to detect if API is not available
+        signal: AbortSignal.timeout(10000), // 10 second timeout
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ error: 'Server error' }));
         throw new Error(error.error || 'Failed to parse resume');
       }
 
@@ -413,8 +417,30 @@ function App() {
 
     } catch (error) {
       console.error('Resume API upload failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setStatus(`❌ Failed to parse resume: ${errorMessage}. Please paste text manually.`);
+
+      let errorMessage = '';
+      let userFriendlyMessage = '';
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+
+        // Check for specific error types
+        if (error.name === 'TypeError' && errorMessage.includes('Failed to fetch')) {
+          userFriendlyMessage = 'Unable to reach the resume parsing API. Please check your internet connection.';
+        } else if (errorMessage.includes('GEMINI_API_KEY')) {
+          userFriendlyMessage = 'API key not configured on the server.';
+        } else if (error.name === 'TimeoutError' || errorMessage.includes('timeout')) {
+          userFriendlyMessage = 'Request timed out. Please try again.';
+        } else if (error.name === 'AbortError') {
+          userFriendlyMessage = 'Request was cancelled due to timeout.';
+        } else {
+          userFriendlyMessage = errorMessage;
+        }
+      } else {
+        userFriendlyMessage = 'Unknown error occurred';
+      }
+
+      setStatus(`❌ ${userFriendlyMessage} Please paste your resume text in the text area below.`);
       setResumeText('');
     } finally {
       setCoverLetterLoading(false);
@@ -755,22 +781,33 @@ function App() {
 
                 {/* Resume upload + Cover Letter */}
                 <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h3 className="font-semibold text-gray-900 mb-2">📎 Upload / Paste Resume</h3>
+                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    📎 Upload / Paste Resume
+                  </h3>
 
-                  <div className="flex items-center gap-3 mb-3">
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Choose file
+                    </label>
                     <input
                       type="file"
                       accept=".txt,.md,.pdf,.docx,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                       onChange={handleResumeFileChange}
-                      className=""
+                      className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700"
                     />
-                    <span className="text-sm text-gray-500">(PDF, DOCX, TXT, MD supported)</span>
+                    <p className="mt-1 text-xs text-gray-500">
+                      📄 Supports: TXT, MD (instant), PDF, DOCX (cloud parsing)
+                    </p>
                     {resumeFilename && (
-                      <span className="ml-2 text-sm text-gray-600">Loaded: {resumeFilename}</span>
+                      <p className="mt-2 text-sm text-green-600 flex items-center gap-2">
+                        ✅ Loaded: <span className="font-medium">{resumeFilename}</span>
+                      </p>
                     )}
                   </div>
 
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Or paste resume text:</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Or paste resume text:
+                  </label>
                   <textarea
                     value={resumeText}
                     onChange={(e) => setResumeText(e.target.value)}
@@ -778,17 +815,17 @@ function App() {
                     className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                   />
 
-                  <div className="mt-3 flex gap-3">
+                  <div className="mt-4 flex gap-3">
                     <button
                       onClick={handleCreateCoverLetter}
                       disabled={coverLetterLoading || availability !== 'available' || !jdAnalysisResult || !resumeText}
-                      className="bg-indigo-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {coverLetterLoading ? '⏳ Creating cover letter...' : '✉️ Create Cover Letter'}
                     </button>
                     <button
                       onClick={() => { setResumeText(''); setResumeFilename(null); setCoverLetterResult(''); }}
-                      className="bg-white border border-gray-200 text-gray-700 py-2 px-3 rounded-lg hover:bg-gray-50"
+                      className="bg-white border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       Clear
                     </button>
