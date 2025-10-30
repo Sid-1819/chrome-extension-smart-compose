@@ -232,20 +232,36 @@ export class GeminiClient {
    * Get AI feedback for interview practice
    */
   async getInterviewFeedback(userText: string, context?: string): Promise<string> {
-    const systemPrompt = `You are an expert interview coach helping candidates improve their responses.
-Analyze the following response and provide constructive feedback on:
-1. Clarity and structure
-2. Relevance and completeness
-3. Communication style
-4. Suggestions for improvement
+    const systemPrompt = `You are an expert interview coach providing direct, actionable feedback.
+Be SPECIFIC and CONSTRUCTIVE. Focus on what to change, not just what's wrong.
+Keep it CONCISE - no fluff. Give 3-4 key points max.`;
 
-Be encouraging but honest. Keep feedback concise and actionable.`;
+    let prompt = `Analyze this interview response and provide feedback:
 
-    let prompt = `User's response: "${userText}"`;
+Response: "${userText}"`;
     if (context) {
       prompt += `\n\nContext: ${context}`;
     }
-    prompt += '\n\nProvide your feedback:';
+
+    prompt += `\n\nFormat your feedback EXACTLY like this:
+
+**✅ What Works Well**
+• [1-2 specific strengths in this response]
+
+**⚠️ Areas to Improve**
+• [Specific issue 1 + how to fix it]
+• [Specific issue 2 + how to fix it]
+
+**💡 Suggested Rewrite** (optional - only if major changes needed)
+[Show a better version of 1-2 key sentences]
+
+RULES:
+- Be SPECIFIC - point to exact phrases or parts
+- Give ACTIONABLE advice - show how to improve
+- Keep it BRIEF - 3-4 bullet points max
+- If response is good, say so clearly
+
+Provide your feedback:`;
 
     return this.generateContent(prompt, systemPrompt);
   }
@@ -254,14 +270,20 @@ Be encouraging but honest. Keep feedback concise and actionable.`;
    * Improve text (rewriting)
    */
   async improveText(text: string, style?: 'professional' | 'casual' | 'concise'): Promise<string> {
-    const stylePrompts = {
-      professional: 'Make this text more professional and polished',
-      casual: 'Make this text more casual and friendly',
-      concise: 'Make this text more concise while keeping the key points'
+    const styleInstructions = {
+      professional: 'Make it polished and business-appropriate. Use strong action verbs. Remove filler words.',
+      casual: 'Make it conversational and approachable. Keep it natural and friendly.',
+      concise: 'Cut it down by 30-50%. Keep only essential information. No fluff.'
     };
 
-    const systemPrompt = stylePrompts[style || 'professional'];
-    const prompt = `Original text: "${text}"\n\nImproved version:`;
+    const systemPrompt = `You are an expert editor. ${styleInstructions[style || 'professional']}
+Output ONLY the improved text - no explanations, no commentary.`;
+
+    const prompt = `Improve this text:
+
+"${text}"
+
+Improved version:`;
 
     return this.generateContent(prompt, systemPrompt);
   }
@@ -310,23 +332,49 @@ Only return the translation, no explanations.`;
    * Analyze job description and extract key information
    */
   async analyzeJobDescription(jobDescription: string): Promise<string> {
-    const systemPrompt = `You are an expert career coach and job market analyst.
-Analyze job descriptions and extract the most critical information that candidates need to prepare for interviews.
-Format your response in a clear, structured way with bullet points.`;
+    const systemPrompt = `You are an expert career coach who extracts actionable insights from job descriptions.
+Keep your analysis CONCISE and SPECIFIC. Use bullet points. Focus on what the candidate needs to prepare for.
+NO generic advice - extract ONLY what's mentioned in this specific JD.`;
 
-    const prompt = `Analyze this job description and extract:
+    const prompt = `Analyze this job description and extract key information for interview prep:
 
-1. **Key Responsibilities** (top 3-5)
-2. **Required Skills & Qualifications** (must-haves)
-3. **Preferred Skills** (nice-to-haves)
-4. **Technical Requirements** (tools, languages, frameworks)
-5. **Experience Level** (years, seniority)
-6. **Company Culture Indicators** (values, work style mentioned)
+Format your response EXACTLY like this:
+
+**🎯 Key Responsibilities**
+• [Most important responsibility from JD]
+• [Second most important]
+• [Third most important]
+
+**✅ Must-Have Skills**
+• [Required skill 1 - be specific]
+• [Required skill 2 - be specific]
+• [Required skill 3 - be specific]
+
+**⚡ Technical Stack**
+• [Specific technology/tool mentioned]
+• [Specific framework/language]
+• [Other technical requirements]
+
+**💡 Nice-to-Have Skills**
+• [Preferred skill if mentioned]
+• [Bonus qualification if mentioned]
+
+**📊 Experience Required**
+• [Years of experience or level]
+
+**🏢 What to Emphasize in Interview**
+• [1-2 key points based on what the role emphasizes most]
+
+RULES:
+- Extract ONLY what's in the JD - don't add generic advice
+- Be SPECIFIC - mention exact technologies, tools, frameworks
+- Keep it CONCISE - short bullet points
+- If a section isn't mentioned in JD, write "Not specified"
 
 Job Description:
 "${jobDescription}"
 
-Provide a well-structured analysis:`;
+Provide the analysis:`;
 
     return this.generateContent(prompt, systemPrompt);
   }
@@ -335,16 +383,37 @@ Provide a well-structured analysis:`;
    * Generate interview questions based on job description
    */
   async generateInterviewQuestions(jobDescription: string, questionCount: number = 10): Promise<string> {
-    const systemPrompt = `You are an expert interview coach who understands what interviewers look for.
-Generate realistic, relevant interview questions that hiring managers would actually ask based on the job description.
-Include a mix of technical, behavioral, and situational questions.`;
+    const systemPrompt = `You are an expert interview coach who creates specific, actionable interview questions.
+Generate questions that are DIRECTLY RELEVANT to the specific job description provided.
+Extract key technologies, skills, and responsibilities mentioned and create targeted questions.
+Keep questions concise and interview-ready - NO explanations, NO meta-commentary.`;
 
-    const prompt = `Based on this job description, generate ${questionCount} likely interview questions.
+    const prompt = `Based on this job description, generate ${questionCount} highly specific interview questions.
 
-Categorize them as:
-- **Behavioral Questions** (3-4 questions using STAR method)
-- **Technical Questions** (3-4 questions about skills/tools mentioned)
-- **Situational Questions** (2-3 questions about problem-solving)
+Format your response EXACTLY like this (clean numbered list with categories):
+
+**Behavioral Questions (STAR Method)**
+1. [Specific question based on a key responsibility mentioned]
+2. [Specific question based on required experience]
+3. [Specific question about handling challenges in this role]
+
+**Technical Questions**
+4. [Question about specific technology/tool mentioned in JD]
+5. [Question about technical skill mentioned in JD]
+6. [Question about technical problem-solving for this role]
+7. [Question about specific framework/language from requirements]
+
+**Situational/Problem-Solving Questions**
+8. [Scenario-based question relevant to this specific role]
+9. [Problem-solving question using technologies mentioned]
+10. [Situational question about team/project challenges for this position]
+
+IMPORTANT RULES:
+- Use SPECIFIC technologies, tools, and skills mentioned in the job description
+- Make questions UNIQUE to this role, not generic
+- NO explanatory text like "Why it's relevant" or "What they're looking for"
+- Just clean, professional interview questions
+- Reference actual requirements from the JD
 
 Job Description:
 "${jobDescription}"
