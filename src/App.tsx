@@ -439,94 +439,102 @@ function App() {
   }
 
   // Voice recording functionality
-  async function startVoiceRecording() {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Speech recognition is not supported in your browser. Please use Chrome.');
+ async function startVoiceRecording() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Speech recognition is not supported in your browser. Please use Chrome.');
+    return;
+  }
+
+  try {
+    // Check microphone permission state first
+    const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+    
+    if (permissionStatus.state === 'prompt') {
+      // Permission not yet granted - open popup to request it
+      setStatus('🎤 Opening permission dialog...');
+      
+      const popupUrl = chrome.runtime.getURL('mic-permission.html');
+      await chrome.windows.create({
+        url: popupUrl,
+        type: 'popup',
+        width: 400,
+        height: 300,
+        focused: true
+      });
+      
+      setStatus('⏳ Please grant microphone permission in the popup window, then try recording again.');
+      return;
+    } else if (permissionStatus.state === 'denied') {
+      setStatus('❌ Microphone permission denied. Please click the microphone icon in the address bar to allow access.');
+      alert('Microphone permission denied. Please allow microphone access in your browser settings:\n\n1. Click the microphone icon in the address bar\n2. Select "Always allow"\n3. Try recording again');
       return;
     }
 
-    try {
-      // Request microphone permission first
-      setStatus('🎤 Requesting microphone permission...');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Permission already granted - proceed with speech recognition
+    setStatus('🎤 Starting recording...');
+    
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    const recognition = new SpeechRecognition();
 
-      // Stop the stream immediately - we just needed permission
-      stream.getTracks().forEach(track => track.stop());
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
 
-      // Now start speech recognition
-      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-      const recognition = new SpeechRecognition();
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setStatus('🎤 Recording... Speak your answer');
+    };
 
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      let finalTranscript = mockAnswer;
 
-      recognition.onstart = () => {
-        setIsRecording(true);
-        setStatus('🎤 Recording... Speak your answer');
-      };
-
-      recognition.onresult = (event: any) => {
-        let interimTranscript = '';
-        let finalTranscript = mockAnswer;
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-
-        setMockAnswer(finalTranscript + interimTranscript);
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        setIsRecording(false);
-
-        let errorMessage = '❌ Speech recognition error';
-        if (event.error === 'not-allowed') {
-          errorMessage = '❌ Microphone permission denied. Please allow microphone access in your browser settings.';
-        } else if (event.error === 'no-speech') {
-          errorMessage = '⚠️ No speech detected. Please try again.';
-        } else if (event.error === 'network') {
-          errorMessage = '❌ Network error. Please check your connection.';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
         } else {
-          errorMessage = `❌ Speech recognition error: ${event.error}`;
+          interimTranscript += transcript;
         }
+      }
 
-        setStatus(errorMessage);
-        alert(errorMessage);
-      };
+      setMockAnswer(finalTranscript + interimTranscript);
+    };
 
-      recognition.onend = () => {
-        setIsRecording(false);
-        setStatus('✅ Recording stopped');
-      };
-
-      // Store recognition instance for stopping
-      (window as any).currentRecognition = recognition;
-      recognition.start();
-
-    } catch (error: any) {
-      console.error('Microphone permission error:', error);
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
       setIsRecording(false);
 
-      let errorMessage = '❌ Could not access microphone';
-      if (error.name === 'NotAllowedError') {
-        errorMessage = '❌ Microphone permission denied. Please allow microphone access in your browser settings and try again.';
-      } else if (error.name === 'NotFoundError') {
-        errorMessage = '❌ No microphone found. Please connect a microphone and try again.';
+      let errorMessage = '❌ Speech recognition error';
+      if (event.error === 'not-allowed') {
+        errorMessage = '❌ Microphone permission denied. Please allow microphone access in your browser settings.';
+      } else if (event.error === 'no-speech') {
+        errorMessage = '⚠️ No speech detected. Please try again.';
+      } else if (event.error === 'network') {
+        errorMessage = '❌ Network error. Please check your connection.';
       } else {
-        errorMessage = `❌ Microphone error: ${error.message}`;
+        errorMessage = `❌ Speech recognition error: ${event.error}`;
       }
 
       setStatus(errorMessage);
       alert(errorMessage);
-    }
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      setStatus('✅ Recording stopped');
+    };
+
+    (window as any).currentRecognition = recognition;
+    recognition.start();
+
+  } catch (error: any) {
+    console.error('Error checking microphone permission:', error);
+    setIsRecording(false);
+    setStatus(`❌ Error: ${error.message}`);
+    alert(`Error: ${error.message}`);
   }
+}
 
   function stopVoiceRecording() {
     const recognition = (window as any).currentRecognition;
