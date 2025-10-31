@@ -598,7 +598,7 @@ Email draft:`;
 
   /**
    * Transcribe audio to text using Prompt API's audio input capability
-   * Uses the correct append() method as per Prompt API documentation
+   * Follows the official Google Prompt API pattern exactly
    */
   async transcribeAudio(audioBlob: Blob): Promise<string> {
     console.log('🎙️ [TRANSCRIBE] Starting audio transcription...');
@@ -608,44 +608,51 @@ Email draft:`;
       sizeInKB: (audioBlob.size / 1024).toFixed(2)
     });
 
-    await this.ensureSession();
-    console.log('🎙️ [TRANSCRIBE] Session ensured');
-
     try {
-      // Convert Blob to File object (required by Prompt API)
-      const file = new File([audioBlob], 'audio.webm', { type: audioBlob.type });
-      console.log('🎙️ [TRANSCRIBE] File object created for append()');
+      // Convert Blob to ArrayBuffer
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      console.log('🎙️ [TRANSCRIBE] ArrayBuffer created:', {
+        byteLength: arrayBuffer.byteLength,
+        sizeInKB: (arrayBuffer.byteLength / 1024).toFixed(2)
+      });
 
-      // Use append() to add the audio to the session context
-      console.log('🎙️ [TRANSCRIBE] Appending audio to session using correct format...');
-      await this.session.append([
+      // Create a new session specifically for audio transcription
+      // Following the exact pattern from Google's example
+      const params = await (window as any).LanguageModel.params();
+      const session = await (window as any).LanguageModel.create({
+        expectedInputs: [{ type: 'audio' }],
+        temperature: 0.1,
+        topK: params.defaultTopK,
+      });
+
+      console.log('🎙️ [TRANSCRIBE] Audio session created, calling promptStreaming...');
+
+      // Use promptStreaming with the exact pattern from Google's example
+      const stream = session.promptStreaming([
         {
           role: 'user',
           content: [
-            {
-              type: 'text',
-              value: 'I am providing you with an audio recording of my interview answer.'
-            },
-            {
-              type: 'audio',
-              value: file
-            }
-          ]
-        }
+            { type: 'text', value: 'Please transcribe the following audio recording accurately' },
+            { type: 'audio', value: arrayBuffer },
+          ],
+        },
       ]);
-      console.log('🎙️ [TRANSCRIBE] ✅ Audio appended to session successfully');
 
-      // Now prompt to transcribe the audio
-      const transcriptionPrompt = `Transcribe the audio recording into clear, accurate text. Only output the transcribed text with no additional commentary or explanations.`;
-
-      console.log('🎙️ [TRANSCRIBE] Sending transcription prompt...');
-      const result = await this.session.prompt(transcriptionPrompt);
+      // Collect all chunks
+      let result = '';
+      for await (const chunk of stream) {
+        console.log(chunk);
+        result += chunk;
+      }
 
       console.log('🎙️ [TRANSCRIBE] ✅ Transcription successful!');
       console.log('🎙️ [TRANSCRIBE] Result:', {
         length: result.length,
         preview: result.substring(0, 200)
       });
+
+      // Clean up the session
+      session.destroy();
 
       return result;
     } catch (error: any) {
@@ -662,7 +669,7 @@ Email draft:`;
 
   /**
    * Transcribe audio with streaming for real-time results
-   * Uses the correct append() method as per Prompt API documentation
+   * Follows the official Google Prompt API pattern
    */
   async *transcribeAudioStreaming(audioBlob: Blob): AsyncGenerator<string> {
     console.log('🎙️ [TRANSCRIBE-STREAM] Starting streaming audio transcription...');
@@ -672,38 +679,35 @@ Email draft:`;
       sizeInKB: (audioBlob.size / 1024).toFixed(2)
     });
 
-    await this.ensureSession();
-    console.log('🎙️ [TRANSCRIBE-STREAM] Session ensured');
-
+    let session: any = null;
     try {
-      // Convert Blob to File object (required by Prompt API)
-      const file = new File([audioBlob], 'audio.webm', { type: audioBlob.type });
-      console.log('🎙️ [TRANSCRIBE-STREAM] File object created for append()');
+      // Convert Blob to ArrayBuffer
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      console.log('🎙️ [TRANSCRIBE-STREAM] ArrayBuffer created:', {
+        byteLength: arrayBuffer.byteLength,
+        sizeInKB: (arrayBuffer.byteLength / 1024).toFixed(2)
+      });
 
-      // Use append() to add the audio to the session context
-      console.log('🎙️ [TRANSCRIBE-STREAM] Appending audio to session using correct format...');
-      await this.session.append([
+      // Create a new session specifically for audio transcription
+      const params = await (window as any).LanguageModel.params();
+      session = await (window as any).LanguageModel.create({
+        expectedInputs: [{ type: 'audio' }],
+        temperature: 0.1,
+        topK: params.defaultTopK,
+      });
+
+      console.log('🎙️ [TRANSCRIBE-STREAM] Audio session created, calling promptStreaming...');
+
+      // Use promptStreaming with the exact pattern from Google's example
+      const stream = session.promptStreaming([
         {
           role: 'user',
           content: [
-            {
-              type: 'text',
-              value: 'I am providing you with an audio recording of my interview answer.'
-            },
-            {
-              type: 'audio',
-              value: file
-            }
-          ]
-        }
+            { type: 'text', value: 'transcribe this audio' },
+            { type: 'audio', value: arrayBuffer },
+          ],
+        },
       ]);
-      console.log('🎙️ [TRANSCRIBE-STREAM] ✅ Audio appended to session successfully');
-
-      // Now prompt to transcribe with streaming
-      const transcriptionPrompt = `Transcribe the audio recording into clear, accurate text. Only output the transcribed text with no additional commentary or explanations.`;
-
-      console.log('🎙️ [TRANSCRIBE-STREAM] Calling promptStreaming...');
-      const stream = this.session.promptStreaming(transcriptionPrompt);
 
       let chunkCount = 0;
       for await (const chunk of stream) {
@@ -728,12 +732,17 @@ Email draft:`;
         audioType: audioBlob.type
       });
       throw new Error(`Failed to transcribe audio: ${error.message}`);
+    } finally {
+      // Clean up the session
+      if (session) {
+        session.destroy();
+      }
     }
   }
 
   /**
    * Extract text from image using Prompt API's image input capability
-   * Uses the correct append() method as per Prompt API documentation
+   * Follows the official Google Prompt API pattern
    */
   async extractTextFromImage(imageBlob: Blob): Promise<string> {
     console.log('🖼️ [IMAGE] Starting text extraction from image...');
@@ -743,44 +752,53 @@ Email draft:`;
       sizeInKB: (imageBlob.size / 1024).toFixed(2)
     });
 
-    await this.ensureSession();
-    console.log('🖼️ [IMAGE] Session ensured');
-
     try {
-      // Convert Blob to File object (required by Prompt API)
-      const file = new File([imageBlob], 'resume.png', { type: imageBlob.type });
-      console.log('🖼️ [IMAGE] File object created for append()');
+      // Convert Blob to ArrayBuffer
+      const arrayBuffer = await imageBlob.arrayBuffer();
+      console.log('🖼️ [IMAGE] ArrayBuffer created:', {
+        byteLength: arrayBuffer.byteLength,
+        sizeInKB: (arrayBuffer.byteLength / 1024).toFixed(2)
+      });
 
-      // Use append() to add the image to the session context
-      console.log('🖼️ [IMAGE] Appending image to session using correct format...');
-      await this.session.append([
+      // Create a new session specifically for image input
+      const params = await (window as any).LanguageModel.params();
+      const session = await (window as any).LanguageModel.create({
+        expectedInputs: [{ type: 'image' }],
+        temperature: 0.1,
+        topK: params.defaultTopK,
+      });
+
+      console.log('🖼️ [IMAGE] Image session created, calling promptStreaming...');
+
+      // Use promptStreaming with the exact pattern from Google's example
+      const stream = session.promptStreaming([
         {
           role: 'user',
           content: [
             {
               type: 'text',
-              value: 'I am providing you with an image of a resume or CV document.'
+              value: 'Extract all text content from this image. If it\'s a resume or CV, extract all the information including: contact details, work experience, education, skills, projects, and any other relevant information. Format the output as clean, structured text. Return only the extracted text with no additional commentary.'
             },
-            {
-              type: 'image',
-              value: file
-            }
-          ]
-        }
+            { type: 'image', value: arrayBuffer },
+          ],
+        },
       ]);
-      console.log('🖼️ [IMAGE] ✅ Image appended to session successfully');
 
-      // Now prompt to extract the text
-      const extractionPrompt = `Extract all text content from the provided image. If it's a resume or CV, extract all the information including: contact details, work experience, education, skills, projects, and any other relevant information. Format the output as clean, structured text. Return only the extracted text with no additional commentary.`;
-
-      console.log('🖼️ [IMAGE] Sending extraction prompt...');
-      const result = await this.session.prompt(extractionPrompt);
+      // Collect all chunks
+      let result = '';
+      for await (const chunk of stream) {
+        console.log(chunk);
+        result += chunk;
+      }
 
       console.log('🖼️ [IMAGE] ✅ Text extraction successful!');
       console.log('🖼️ [IMAGE] Result:', {
         length: result.length,
         preview: result.substring(0, 200)
       });
+
+      // Clean up the session
+      session.destroy();
 
       return result;
     } catch (error: any) {

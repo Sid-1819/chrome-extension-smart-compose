@@ -1,14 +1,23 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import { GeminiClient } from "./utils/geminiClient";
-import ReactMarkdown from "react-markdown";
+import Markdown from "react-markdown";
+import { LoadingSpinner, LoadingOverlay } from "./components/LoadingSpinner";
+import { LOADING_MESSAGES, type LoadingState } from "./constants/loadingMessages";
 
 function App() {
   const [status, setStatus] = useState("Checking API availability...");
   const [availability, setAvailability] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'interview-prep' | 'mock-interview'>('interview-prep');
+  const [activeTab, setActiveTab] = useState<'jd-coverletter' | 'interview-practice'>('jd-coverletter');
   const [geminiClient, setGeminiClient] = useState<GeminiClient | null>(null);
+
+  // Granular loading states
+  const [jdAnalysisLoading, setJdAnalysisLoading] = useState<LoadingState>({ isLoading: false, message: '' });
+  const [questionsLoading, setQuestionsLoading] = useState<LoadingState>({ isLoading: false, message: '' });
+  const [resumeLoading, setResumeLoading] = useState<LoadingState>({ isLoading: false, message: '' });
+  const [coverLetterLoading, setCoverLetterLoading] = useState<LoadingState>({ isLoading: false, message: '' });
+  const [mockLoading, setMockLoading] = useState<LoadingState>({ isLoading: false, message: '' });
+  const [audioLoading, setAudioLoading] = useState<LoadingState>({ isLoading: false, message: '' });
 
   // Interview Prep states
   const [jobDescription, setJobDescription] = useState("");
@@ -18,14 +27,12 @@ function App() {
   const [resumeText, setResumeText] = useState("");
   const [resumeFilename, setResumeFilename] = useState<string | null>(null);
   const [coverLetterResult, setCoverLetterResult] = useState("");
-  const [coverLetterLoading, setCoverLetterLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   // Mock Interview states
   const [mockQuestion, setMockQuestion] = useState("");
   const [mockAnswer, setMockAnswer] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [mockFeedback, setMockFeedback] = useState("");
-  const [mockLoading, setMockLoading] = useState(false);
   const [questionsList, setQuestionsList] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(-1);
   const [customQuestion, setCustomQuestion] = useState("");
@@ -81,13 +88,32 @@ function App() {
     const lines = questionsText.split('\n').filter(line => line.trim());
     const questions: string[] = [];
 
+    // Common section heading patterns to filter out
+    const sectionHeadingPatterns = [
+      /^#+\s*/i, // Markdown headers (##, ###, etc.)
+      /^(behavioral|technical|situational|problem-solving|coding|system design)\s+(questions?|interview)/i,
+      /\(STAR\s+Method\)/i,
+      /questions?\s*:?\s*$/i, // Lines ending with "Questions" or "Question:"
+      /^questions?\s*$/i, // Lines that are just "Questions" or "Question"
+    ];
+
     for (const line of lines) {
       // Remove numbering like "1.", "2.", etc."
       const cleaned = line.replace(/^\d+\.\s*/, '').trim();
-      // Only add non-empty lines that look like questions or statements
-      if (cleaned.length > 10) {
-        questions.push(cleaned);
-      }
+
+      // Skip empty lines or very short lines
+      if (cleaned.length <= 10) continue;
+
+      // Check if this line matches any section heading pattern
+      const isSectionHeading = sectionHeadingPatterns.some(pattern =>
+        pattern.test(cleaned)
+      );
+
+      // Skip lines that look like section headings
+      if (isSectionHeading) continue;
+
+      // Only add lines that look like actual questions or statements
+      questions.push(cleaned);
     }
 
     return questions.length > 0 ? questions : [questionsText]; // Fallback to full text if parsing fails
@@ -102,7 +128,7 @@ function App() {
 
     setQuestionsList(prev => [...prev, customQuestion.trim()]);
     setCustomQuestion('');
-    setStatus('✅ Custom question added!');
+    setStatus('Custom question added!');
   }
 
   // Select a question to answer
@@ -111,7 +137,7 @@ function App() {
     setMockQuestion(questionsList[index]);
     setMockAnswer('');
     setMockFeedback('');
-    setStatus(`📝 Selected question ${index + 1} of ${questionsList.length}`);
+    setStatus(`Selected question ${index + 1} of ${questionsList.length}`);
   }
 
   // Navigate to next question
@@ -142,12 +168,12 @@ function App() {
         if (Date.now() - timestamp < 5000) {
           if (action === 'analyze-job-description') {
             setJobDescription(text);
-            setActiveTab('interview-prep');
+            setActiveTab('jd-coverletter');
             // Auto-analyze immediately with the text
             handleAnalyzeJobDescription(text);
           } else if (action === 'generate-questions') {
             setJobDescription(text);
-            setActiveTab('interview-prep');
+            setActiveTab('interview-practice');
             // Auto-generate immediately with the text
             handleGenerateQuestions(text);
           }
@@ -170,24 +196,24 @@ function App() {
     try {
       // Check Prompt API
       if (!('LanguageModel' in window)) {
-        setStatus(" Prompt API not supported. Please use Chrome 127+ and enable flags.");
+        setStatus("Prompt API not supported. Please use Chrome 127+ and enable flags.");
         setAvailability("unavailable");
       } else {
         const availabilityStatus = await (window as any).LanguageModel.availability();
         setAvailability(availabilityStatus);
 
         if (availabilityStatus === 'available') {
-          setStatus(" Gemini Nano is ready!");
+          setStatus("Gemini Nano is ready!");
         } else if (availabilityStatus === 'downloading') {
-          setStatus(" Gemini Nano is downloading... Please wait.");
+          setStatus("Gemini Nano is downloading... Please wait.");
           pollForAvailability();
         } else {
-          setStatus(" Gemini Nano not available. Check setup instructions below.");
+          setStatus("Gemini Nano not available. Check setup instructions below.");
         }
       }
     } catch (error) {
       console.error('Error checking availability:', error);
-      setStatus(" Error checking API. Make sure flags are enabled.");
+      setStatus("Error checking API. Make sure flags are enabled.");
       setAvailability("unavailable");
     }
   }
@@ -199,10 +225,10 @@ function App() {
         setAvailability(availabilityStatus);
 
         if (availabilityStatus === 'available') {
-          setStatus(" Gemini Nano download complete! Ready to use.");
+          setStatus("Gemini Nano download complete! Ready to use.");
           clearInterval(interval);
         } else if (availabilityStatus === 'unavailable') {
-          setStatus(" Download failed. Please check your setup.");
+          setStatus("Download failed. Please check your setup.");
           clearInterval(interval);
         }
       } catch (error) {
@@ -218,14 +244,19 @@ function App() {
       return;
     }
 
-    setLoading(true);
+    setJdAnalysisLoading({
+      isLoading: true,
+      message: LOADING_MESSAGES.ANALYZING_JD,
+      subMessage: LOADING_MESSAGES.ANALYZING_JD_SUB
+    });
     setJdAnalysisResult('');
-    setStatus('🔍 Analyzing job description...');
+    setStatus(LOADING_MESSAGES.ANALYZING_JD);
 
     try {
       // Use existing client or initialize
       let client = geminiClient;
       if (!client) {
+        setStatus(LOADING_MESSAGES.INITIALIZING_CLIENT);
         client = new GeminiClient();
         await client.initializeSession();
         setGeminiClient(client);
@@ -233,12 +264,12 @@ function App() {
 
       const analysis = await client.analyzeJobDescription(text);
       setJdAnalysisResult(analysis);
-      setStatus('✅ Job description analyzed!');
+      setStatus('Job description analyzed!');
     } catch (error) {
       setJdAnalysisResult(`Error: ${error}`);
-      setStatus('❌ Failed to analyze job description.');
+      setStatus('Failed to analyze job description.');
     } finally {
-      setLoading(false);
+      setJdAnalysisLoading({ isLoading: false, message: '' });
     }
   }
 
@@ -249,14 +280,19 @@ function App() {
       return;
     }
 
-    setLoading(true);
+    setQuestionsLoading({
+      isLoading: true,
+      message: LOADING_MESSAGES.GENERATING_QUESTIONS,
+      subMessage: LOADING_MESSAGES.GENERATING_QUESTIONS_SUB
+    });
     setInterviewQuestions('');
-    setStatus('💭 Generating interview questions...');
+    setStatus(LOADING_MESSAGES.GENERATING_QUESTIONS);
 
     try {
       // Use existing client or initialize
       let client = geminiClient;
       if (!client) {
+        setStatus(LOADING_MESSAGES.INITIALIZING_CLIENT);
         client = new GeminiClient();
         await client.initializeSession();
         setGeminiClient(client);
@@ -264,12 +300,12 @@ function App() {
 
       const questions = await client.generateInterviewQuestions(text);
       setInterviewQuestions(questions);
-      setStatus('✅ Interview questions generated!');
+      setStatus('Interview questions generated!');
     } catch (error) {
       setInterviewQuestions(`Error: ${error}`);
-      setStatus('❌ Failed to generate questions.');
+      setStatus('Failed to generate questions.');
     } finally {
-      setLoading(false);
+      setQuestionsLoading({ isLoading: false, message: '' });
     }
   }
 
@@ -299,12 +335,12 @@ function App() {
       reader.onload = () => {
         const text = String(reader.result || '');
         setResumeText(text);
-        setStatus(`✅ Loaded resume: ${file.name}`);
+        setStatus(`Loaded resume: ${file.name}`);
         console.log('📄 [RESUME] Text file loaded:', text.length, 'characters');
       };
       reader.onerror = () => {
         console.error('📄 [RESUME] Failed to read text file');
-        setStatus('❌ Failed to read file. Please paste your resume text below.');
+        setStatus('Failed to read file. Please paste your resume text below.');
       };
       reader.readAsText(file);
     }
@@ -333,7 +369,7 @@ function App() {
     else {
       // Unsupported file type
       console.warn('📄 [RESUME] Unsupported file type:', file.type);
-      setStatus('⚠️ File type not supported. Please use PDF, DOCX, TXT, MD, or image files (PNG, JPG), or paste text below.');
+      setStatus('File type not supported. Please use PDF, DOCX, TXT, MD, or image files (PNG, JPG), or paste text below.');
       setResumeText('');
     }
   }
@@ -342,8 +378,12 @@ function App() {
    * Extract text from image resume using Prompt API's image input, with fallback to Vercel API
    */
   async function handleResumeImageUpload(file: File) {
-    setCoverLetterLoading(true);
-    setStatus('🖼️ Extracting text from image...');
+    setResumeLoading({
+      isLoading: true,
+      message: LOADING_MESSAGES.EXTRACTING_IMAGE,
+      subMessage: LOADING_MESSAGES.EXTRACTING_IMAGE_SUB
+    });
+    setStatus(LOADING_MESSAGES.EXTRACTING_IMAGE);
     setResumeText('');
 
     console.log('📄 [RESUME-IMAGE] Starting image text extraction...');
@@ -388,8 +428,8 @@ function App() {
         });
 
         setResumeText(extractedText);
-        setStatus(`✅ Successfully extracted text from ${file.name} (${extractedText.length} characters) using on-device AI`);
-        setCoverLetterLoading(false);
+        setStatus(`Successfully extracted text from ${file.name} (${extractedText.length} characters) using on-device AI`);
+        setResumeLoading({ isLoading: false, message: '' });
         return; // Success! Exit early
 
       } catch (error: any) {
@@ -398,11 +438,11 @@ function App() {
           name: error.name,
           message: error.message
         });
-        setStatus('⚠️ On-device extraction failed, trying cloud API...');
+        setStatus('On-device extraction failed, trying cloud API...');
       }
     } else {
       console.log('📄 [RESUME-IMAGE] Gemini Nano not available, using cloud API...');
-      setStatus('🖼️ Using cloud API for text extraction...');
+      setStatus('Using cloud API for text extraction...');
     }
 
     // Fallback: Use Vercel API (same as PDF/DOCX)
@@ -414,7 +454,7 @@ function App() {
       formData.append('file', file);
 
       // Use the same API endpoint (it should handle images too)
-      const PRODUCTION_API_URL = import.meta.env.VITE_API_URL || 'https://interview-coach-ai-9vgs.vercel.app/api/parse-resume';
+      const PRODUCTION_API_URL = import.meta.env.VITE_API_URL || 'https://interview-coach-ai-nu.vercel.app/api/parse-resume';
 
       console.log('📄 [RESUME-IMAGE] Sending image to API:', PRODUCTION_API_URL);
 
@@ -433,7 +473,7 @@ function App() {
 
       if (data.success && data.text) {
         setResumeText(data.text);
-        setStatus(`✅ Successfully extracted text from ${file.name} (${data.cleanedLength} characters) using cloud API`);
+        setStatus(`Successfully extracted text from ${file.name} (${data.cleanedLength} characters) using cloud API`);
         console.log('📄 [RESUME-IMAGE] ✅ Cloud API extraction successful');
       } else {
         throw new Error('No text extracted from image');
@@ -455,10 +495,10 @@ function App() {
         userFriendlyMessage = apiError.message;
       }
 
-      setStatus(`❌ ${userFriendlyMessage} Please paste your resume text in the text area below.`);
+      setStatus(`${userFriendlyMessage} Please paste your resume text in the text area below.`);
       setResumeText('');
     } finally {
-      setCoverLetterLoading(false);
+      setResumeLoading({ isLoading: false, message: '' });
     }
   }
 
@@ -466,8 +506,12 @@ function App() {
    * Upload PDF/DOCX resume to Vercel API for parsing
    */
   async function handleResumeAPIUpload(file: File) {
-    setCoverLetterLoading(true);
-    setStatus('📄 Parsing resume file...');
+    setResumeLoading({
+      isLoading: true,
+      message: LOADING_MESSAGES.PROCESSING_RESUME_API,
+      subMessage: LOADING_MESSAGES.PARSING_RESUME
+    });
+    setStatus(LOADING_MESSAGES.PROCESSING_RESUME_API);
     setResumeText('');
 
     try {
@@ -478,7 +522,7 @@ function App() {
       // Determine API URL
       // For Chrome extensions, we need to use the full Vercel URL since relative paths don't work
       // Default to the deployed Vercel URL, but allow override via environment variable
-      const PRODUCTION_API_URL = import.meta.env.VITE_API_URL || 'https://interview-coach-ai-9vgs.vercel.app/api/parse-resume';
+      const PRODUCTION_API_URL = import.meta.env.VITE_API_URL || 'https://interview-coach-ai-nu.vercel.app/api/parse-resume';
       const apiUrl = PRODUCTION_API_URL;
 
       console.log('Attempting to parse resume using API:', apiUrl);
@@ -498,7 +542,7 @@ function App() {
 
       if (data.success && data.text) {
         setResumeText(data.text);
-        setStatus(`✅ Successfully parsed ${file.name} (${data.cleanedLength} characters)`);
+        setStatus(`Successfully parsed ${file.name} (${data.cleanedLength} characters)`);
       } else {
         throw new Error('No text extracted from file');
       }
@@ -528,10 +572,10 @@ function App() {
         userFriendlyMessage = 'Unknown error occurred';
       }
 
-      setStatus(`❌ ${userFriendlyMessage} Please paste your resume text in the text area below.`);
+      setStatus(`${userFriendlyMessage} Please paste your resume text in the text area below.`);
       setResumeText('');
     } finally {
-      setCoverLetterLoading(false);
+      setResumeLoading({ isLoading: false, message: '' });
     }
   }
 
@@ -541,8 +585,8 @@ function App() {
    * if available on the device.
    */
   async function handleCreateCoverLetter() {
-    if (!jdAnalysisResult.trim()) {
-      alert('Please analyze the job description first.');
+    if (!jobDescription.trim()) {
+      alert('Please paste a job description first.');
       return;
     }
     if (!resumeText.trim()) {
@@ -550,9 +594,12 @@ function App() {
       return;
     }
 
-    setCoverLetterLoading(true);
+    setCoverLetterLoading({
+      isLoading: true,
+      message: LOADING_MESSAGES.CREATING_COVER_LETTER,
+      subMessage: LOADING_MESSAGES.CREATING_COVER_LETTER_SUB
+    });
     setCoverLetterResult('');
-    setStatus('✉️ Generating cover letter...');
 
     try {
       let client = geminiClient;
@@ -562,21 +609,31 @@ function App() {
         setGeminiClient(client);
       }
 
+      // Auto-analyze JD if not already done
+      let analysis = jdAnalysisResult;
+      if (!analysis.trim()) {
+        setStatus('Analyzing job description first...');
+        analysis = await client.analyzeJobDescription(jobDescription);
+        setJdAnalysisResult(analysis);
+      }
+
+      setStatus('Generating cover letter...');
+
   const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). IMPORTANT: Keep the cover letter under 250 words.`;
 
-  const userPrompt = `---\nJob Description Analysis:\n${jdAnalysisResult}\n\n---\nApplicant Resume:\n${resumeText}\n\n---\nWrite a cover letter for this candidate applying to the job described above. Reference both the job requirements and the candidate's relevant experience. Make the letter unique to this application.`;
+  const userPrompt = `---\nJob Description Analysis:\n${analysis}\n\n---\nApplicant Resume:\n${resumeText}\n\n---\nWrite a cover letter for this candidate applying to the job described above. Reference both the job requirements and the candidate's relevant experience. Make the letter unique to this application.`;
 
       const generated = await client.generateContent(userPrompt, systemPrompt);
 
       setCoverLetterResult(generated);
 
-      setStatus('✅ Cover letter created!');
+      setStatus('Cover letter created!');
     } catch (error: any) {
       console.error('Cover letter generation failed:', error);
-      setStatus('❌ Failed to create cover letter.');
+      setStatus('Failed to create cover letter.');
       setCoverLetterResult(`Error: ${String(error)}`);
     } finally {
-      setCoverLetterLoading(false);
+      setCoverLetterLoading({ isLoading: false, message: '' });
     }
   }
 
@@ -587,7 +644,7 @@ function App() {
     try {
       await navigator.clipboard.writeText(coverLetterResult);
       setCopySuccess(true);
-      setStatus('✅ Cover letter copied to clipboard!');
+      setStatus('Cover letter copied to clipboard!');
 
       // Reset copy success after 2 seconds
       setTimeout(() => {
@@ -595,7 +652,7 @@ function App() {
       }, 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
-      setStatus('❌ Failed to copy to clipboard');
+      setStatus('Failed to copy to clipboard');
     }
   }
 
@@ -620,7 +677,7 @@ function App() {
       if (permissionStatus.state === 'prompt') {
         // Permission not yet granted - open popup to request it
         console.log('🎤 [AUDIO] Opening permission dialog...');
-        setStatus('🎤 Opening permission dialog...');
+        setStatus('Opening permission dialog...');
 
         const popupUrl = chrome.runtime.getURL('mic-permission.html');
         await chrome.windows.create({
@@ -631,18 +688,18 @@ function App() {
           focused: true
         });
 
-        setStatus('⏳ Please grant microphone permission in the popup window, then try recording again.');
+        setStatus('Please grant microphone permission in the popup window, then try recording again.');
         return;
       } else if (permissionStatus.state === 'denied') {
         console.error('🎤 [AUDIO] Microphone permission denied');
-        setStatus('❌ Microphone permission denied. Please click the microphone icon in the address bar to allow access.');
+        setStatus('Microphone permission denied. Please click the microphone icon in the address bar to allow access.');
         alert('Microphone permission denied. Please allow microphone access in your browser settings:\n\n1. Click the microphone icon in the address bar\n2. Select "Always allow"\n3. Try recording again');
         return;
       }
 
       // Permission already granted - proceed with audio recording
       console.log('🎤 [AUDIO] Permission granted, requesting microphone access...');
-      setStatus('🎤 Starting recording...');
+      setStatus('Starting recording...');
 
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -691,13 +748,18 @@ function App() {
       recorder.onstart = () => {
         console.log('🎤 [AUDIO] Recording started');
         setIsRecording(true);
-        setStatus('🎤 Recording... Speak your answer');
+        setStatus('Recording... Speak your answer');
       };
 
       recorder.onstop = async () => {
         console.log('🎤 [AUDIO] Recording stopped, processing audio...');
         setIsRecording(false);
-        setStatus('⏳ Transcribing audio...');
+        setAudioLoading({
+          isLoading: true,
+          message: LOADING_MESSAGES.TRANSCRIBING_AUDIO,
+          subMessage: LOADING_MESSAGES.TRANSCRIBING_AUDIO_SUB
+        });
+        setStatus(LOADING_MESSAGES.TRANSCRIBING_AUDIO);
 
         // Combine all chunks into a single Blob
         const audioBlob = new Blob(chunks, { type: mimeType });
@@ -743,15 +805,17 @@ function App() {
 
           // Append transcription to existing answer
           setMockAnswer(prev => prev ? `${prev} ${transcription}` : transcription);
-          setStatus('✅ Audio transcribed successfully!');
+          setStatus('Audio transcribed successfully!');
           console.log('🎤 [AUDIO] Transcription complete!');
+          setAudioLoading({ isLoading: false, message: '' });
         } catch (error: any) {
           console.error('🎤 [AUDIO] ❌ Transcription error:', {
             name: error.name,
             message: error.message,
             stack: error.stack
           });
-          setStatus('❌ Failed to transcribe audio. Please try again.');
+          setStatus('Failed to transcribe audio. Please try again.');
+          setAudioLoading({ isLoading: false, message: '' });
           alert(`Transcription failed: ${error.message}\n\nPlease try again or type your answer instead.`);
         }
       };
@@ -759,7 +823,7 @@ function App() {
       recorder.onerror = (event: any) => {
         console.error('🎤 [AUDIO] ❌ MediaRecorder error:', event.error);
         setIsRecording(false);
-        setStatus('❌ Recording error occurred');
+        setStatus('Recording error occurred');
         alert(`Recording error: ${event.error}`);
 
         // Stop all tracks
@@ -781,11 +845,11 @@ function App() {
       });
       setIsRecording(false);
 
-      let errorMessage = `❌ Error: ${error.message}`;
+      let errorMessage = `Error: ${error.message}`;
       if (error.name === 'NotAllowedError') {
-        errorMessage = '❌ Microphone permission denied. Please allow microphone access in your browser settings.';
+        errorMessage = 'Microphone permission denied. Please allow microphone access in your browser settings.';
       } else if (error.name === 'NotFoundError') {
-        errorMessage = '❌ No microphone found. Please connect a microphone and try again.';
+        errorMessage = 'No microphone found. Please connect a microphone and try again.';
       }
 
       setStatus(errorMessage);
@@ -801,7 +865,7 @@ function App() {
         mimeType: mediaRecorder.mimeType
       });
       mediaRecorder.stop();
-      setStatus('⏳ Processing recording...');
+      setStatus('Processing recording...');
     } else {
       console.warn('🎤 [AUDIO] Cannot stop - MediaRecorder is inactive or null');
     }
@@ -817,9 +881,13 @@ function App() {
       return;
     }
 
-    setMockLoading(true);
+    setMockLoading({
+      isLoading: true,
+      message: LOADING_MESSAGES.EVALUATING_ANSWER,
+      subMessage: LOADING_MESSAGES.EVALUATING_ANSWER_SUB
+    });
     setMockFeedback('');
-    setStatus('🤔 Evaluating your answer...');
+    setStatus(LOADING_MESSAGES.EVALUATING_ANSWER);
 
     try {
       let client = geminiClient;
@@ -831,63 +899,63 @@ function App() {
 
       const evaluation = await client.evaluateMockInterviewAnswer(mockQuestion, mockAnswer);
       setMockFeedback(evaluation);
-      setStatus('✅ Evaluation complete!');
+      setStatus('Evaluation complete!');
     } catch (error: any) {
       console.error('Mock interview evaluation failed:', error);
-      setStatus('❌ Failed to evaluate answer.');
+      setStatus('Failed to evaluate answer.');
       setMockFeedback(`Error: ${String(error)}`);
     } finally {
-      setMockLoading(false);
+      setMockLoading({ isLoading: false, message: '' });
     }
   }
 
   const tabs = [
-    { id: 'interview-prep', label: 'Interview Prep', icon: '📋' },
-    { id: 'mock-interview', label: 'Mock Interview', icon: '🎙️' }
+    { id: 'jd-coverletter', label: 'Job Analysis & Cover Letter' },
+    { id: 'interview-practice', label: 'Interview Practice' }
   ] as const;
 
   // Check if running in iframe (sidebar mode)
   const isInSidebar = window.self !== window.top;
 
   return (
-    <div className={`${isInSidebar ? 'min-h-full' : 'min-h-screen'} bg-blue-50 p-6`}>
+    <div className={`${isInSidebar ? 'min-h-full' : 'min-h-screen'} bg-gray-50 p-6`}>
       <div className={isInSidebar ? 'max-w-full' : 'max-w-4xl mx-auto'}>
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-purple-600 mb-2">
+          <h1 className="text-4xl font-bold text-black mb-2">
             InterviewCoach.AI
           </h1>
           <p className="text-gray-600">AI-Powered Interview Prep • On-Device • No API Key Needed</p>
-          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm text-blue-800">
-              💡 <strong>Pro Tip:</strong> Highlight job descriptions on any webpage, right-click → <strong>"InterviewCoach.AI"</strong> → then click the extension icon to see results!
+          <div className="mt-3 p-3 bg-white rounded-lg border border-gray-300">
+            <p className="text-sm text-gray-700">
+              <strong>Pro Tip:</strong> Highlight job descriptions on any webpage, right-click → <strong>"InterviewCoach.AI"</strong> → then click the extension icon to see results!
             </p>
           </div>
         </div>
 
         {/* Status Card */}
         <div className={`p-4 rounded-lg mb-6 ${
-          availability === 'available' ? 'bg-green-100 border-green-500' :
-          availability === 'downloading' ? 'bg-yellow-100 border-yellow-500' :
-          'bg-red-100 border-red-500'
+          availability === 'available' ? 'bg-white border-gray-900' :
+          availability === 'downloading' ? 'bg-gray-200 border-gray-600' :
+          'bg-gray-100 border-gray-400'
         } border-l-4`}>
           <div className="flex items-center justify-between">
-            <p className="font-medium">{status}</p>
+            <p className="font-medium text-gray-900">{status}</p>
             <button
               onClick={checkAvailability}
-              className="px-3 py-1 text-sm bg-white rounded-md hover:bg-gray-100 transition-colors"
+              className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
             >
-              🔄 Refresh
+              Refresh
             </button>
           </div>
 
           {availability === 'unavailable' && (
-            <div className="mt-4 text-sm">
+            <div className="mt-4 text-sm text-gray-700">
               <p className="font-semibold mb-2">Setup Required:</p>
 
               {/* Prompt API Setup */}
               <div className="mb-3">
-                <p className="font-medium text-purple-700 mb-1">For Prompt API (Interview Features):</p>
+                <p className="font-medium text-gray-900 mb-1">For Prompt API (Interview Features):</p>
                 <ol className="list-decimal ml-5 space-y-1">
                   <li>Open <code className="bg-gray-800 text-white px-2 py-0.5 rounded">chrome://flags/#optimization-guide-on-device-model</code></li>
                   <li>Set to <strong>"Enabled BypassPerfRequirement"</strong></li>
@@ -915,11 +983,11 @@ function App() {
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'bg-purple-600 text-white'
+                    ? 'bg-gray-900 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {tab.icon} {tab.label}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -927,11 +995,11 @@ function App() {
 
           {/* Tab Content */}
           <div className="space-y-4">
-            {/* Interview Prep Tab */}
-            {activeTab === 'interview-prep' && (
+            {/* Job Analysis & Cover Letter Tab */}
+            {activeTab === 'jd-coverletter' && (
               <div>
                 <p className="text-gray-600 mb-4">
-                  Paste a job description to get AI-powered analysis and personalized interview questions.
+                  Paste a job description to get AI-powered analysis and create a tailored cover letter.
                 </p>
 
                 {/* Job Description Input */}
@@ -951,57 +1019,54 @@ function App() {
                   </p>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="grid grid-cols-2 gap-3 mb-6">
+                {/* Action Button */}
+                <div className="mb-6">
                   <button
                     onClick={() => handleAnalyzeJobDescription()}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    disabled={jdAnalysisLoading.isLoading || availability !== 'available'}
+                    className="w-full bg-gray-900 text-white py-3 rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {loading && !interviewQuestions ? '⏳ Analyzing...' : '🔍 Analyze JD'}
-                  </button>
-                  <button
-                    onClick={() => handleGenerateQuestions()}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {loading && interviewQuestions !== jdAnalysisResult ? '⏳ Generating...' : '💭 Generate Questions'}
+                    {jdAnalysisLoading.isLoading ? jdAnalysisLoading.message : 'Analyze Job Description'}
                   </button>
                 </div>
 
-                {/* Results */}
-                {jdAnalysisResult && (
-                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                      🔍 Job Description Analysis
-                    </h3>
-                    <div className="text-gray-700 prose prose-sm max-w-none">
-                      <ReactMarkdown>{jdAnalysisResult}</ReactMarkdown>
-                    </div>
+                {/* Loading Indicator */}
+                {jdAnalysisLoading.isLoading && (
+                  <div className="mb-6">
+                    <LoadingSpinner
+                      message={jdAnalysisLoading.message}
+                      size="medium"
+                    />
+                    {jdAnalysisLoading.subMessage && (
+                      <p className="text-center text-sm text-gray-600 mt-2">{jdAnalysisLoading.subMessage}</p>
+                    )}
                   </div>
                 )}
 
-                {interviewQuestions && (
-                  <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
-                      💭 Likely Interview Questions
+                {/* Analysis Result */}
+                {jdAnalysisResult && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-300">
+                    <h3 className="font-semibold text-gray-900 mb-2 text-left">
+                      Job Description Analysis
                     </h3>
-                    <div className="text-gray-700 prose prose-sm max-w-none">
-                      <ReactMarkdown>{interviewQuestions}</ReactMarkdown>
+                    <div className="text-gray-700 prose prose-sm max-w-none text-left">
+                      <Markdown>{jdAnalysisResult}</Markdown>
                     </div>
-                    <button
-                      onClick={() => setActiveTab('mock-interview')}
-                      className="mt-4 w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      🎤 Start Mock Interview with These Questions
-                    </button>
                   </div>
                 )}
 
                 {/* Resume upload + Cover Letter */}
-                <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    📎 Upload / Paste Resume
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 relative">
+                  {/* Loading Overlay for Resume Processing */}
+                  {resumeLoading.isLoading && (
+                    <LoadingOverlay
+                      message={resumeLoading.message}
+                      subMessage={resumeLoading.subMessage}
+                    />
+                  )}
+
+                  <h3 className="font-semibold text-gray-900 mb-4">
+                    Upload / Paste Resume
                   </h3>
 
                   <div className="mb-4">
@@ -1012,14 +1077,14 @@ function App() {
                       type="file"
                       accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.gif,.webp,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
                       onChange={handleResumeFileChange}
-                      className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700"
+                      className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 focus:ring-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-900 file:text-white hover:file:bg-gray-800"
                     />
                     <p className="mt-1 text-xs text-gray-500">
-                      📄 Supports: TXT, MD (instant), Images (AI extraction), PDF, DOCX (cloud parsing)
+                      Supports: TXT, MD (instant), Images (AI extraction), PDF, DOCX (cloud parsing)
                     </p>
                     {resumeFilename && (
-                      <p className="mt-2 text-sm text-green-600 flex items-center gap-2">
-                        ✅ Loaded: <span className="font-medium">{resumeFilename}</span>
+                      <p className="mt-2 text-sm text-gray-700">
+                        Loaded: <span className="font-medium">{resumeFilename}</span>
                       </p>
                     )}
                   </div>
@@ -1031,16 +1096,16 @@ function App() {
                     value={resumeText}
                     onChange={(e) => setResumeText(e.target.value)}
                     placeholder="Paste your resume or CV text here if file upload isn't supported (PDF/DOCX)."
-                    className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent resize-none"
                   />
 
                   <div className="mt-4 flex gap-3">
                     <button
                       onClick={handleCreateCoverLetter}
-                      disabled={coverLetterLoading || availability !== 'available' || !jdAnalysisResult || !resumeText}
-                      className="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      disabled={coverLetterLoading.isLoading || availability !== 'available' || !jobDescription.trim() || !resumeText.trim()}
+                      className="flex-1 bg-gray-900 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      {coverLetterLoading ? '⏳ Creating cover letter...' : '✉️ Create Cover Letter'}
+                      {coverLetterLoading.isLoading ? coverLetterLoading.message : 'Create Cover Letter'}
                     </button>
                     <button
                       onClick={() => { setResumeText(''); setResumeFilename(null); setCoverLetterResult(''); }}
@@ -1050,34 +1115,36 @@ function App() {
                     </button>
                   </div>
 
+                  {/* Loading Indicator for Cover Letter */}
+                  {coverLetterLoading.isLoading && (
+                    <div className="mt-4">
+                      <LoadingSpinner
+                        message={coverLetterLoading.message}
+                        size="medium"
+                      />
+                      {coverLetterLoading.subMessage && (
+                        <p className="text-center text-sm text-gray-600 mt-2">{coverLetterLoading.subMessage}</p>
+                      )}
+                    </div>
+                  )}
+
                   {coverLetterResult && (
-                    <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                    <div className="mt-4 p-4 bg-white rounded-lg border border-gray-300">
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold">Generated Cover Letter</h4>
+                        <h4 className="font-semibold text-gray-900 text-left">Generated Cover Letter</h4>
                         <button
                           onClick={handleCopyCoverLetter}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
+                          className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
                             copySuccess
-                              ? 'bg-green-600 text-white'
-                              : 'bg-purple-600 text-white hover:bg-purple-700'
+                              ? 'bg-gray-700 text-white'
+                              : 'bg-gray-900 text-white hover:bg-gray-800'
                           }`}
                         >
-                          {copySuccess ? (
-                            <>
-                              ✓ 
-                            </>
-                          ) : (
-                            <>
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
-                            
-                            </>
-                          )}
+                          {copySuccess ? 'Copied' : 'Copy'}
                         </button>
                       </div>
-                      <div className="text-gray-800 prose prose-sm max-w-none">
-                        <ReactMarkdown>{coverLetterResult}</ReactMarkdown>
+                      <div className="text-gray-800 prose prose-sm max-w-none text-left">
+                        <Markdown>{coverLetterResult}</Markdown>
                       </div>
                     </div>
                   )}
@@ -1085,25 +1152,88 @@ function App() {
               </div>
             )}
 
-            {/* Mock Interview Tab */}
-            {activeTab === 'mock-interview' && (
+            {/* Interview Practice Tab */}
+            {activeTab === 'interview-practice' && (
               <div>
+                <p className="text-gray-600 mb-6">
+                  Generate interview questions from a job description, then practice answering them with AI-powered feedback.
+                </p>
+
+                {/* Job Description Input for Questions */}
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-300">
+                  <h3 className="font-semibold text-gray-900 mb-3">
+                    Generate Interview Questions
+                  </h3>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Job Description:
+                  </label>
+                  <textarea
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    placeholder="Paste the job description here to generate relevant interview questions..."
+                    className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent resize-none"
+                    disabled={availability !== 'available'}
+                  />
+                  <p className="text-sm text-gray-500 mt-1 mb-3">
+                    {jobDescription.length} characters
+                  </p>
+                  <button
+                    onClick={() => handleGenerateQuestions()}
+                    disabled={questionsLoading.isLoading || availability !== 'available'}
+                    className="w-full bg-gray-900 text-white py-3 rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {questionsLoading.isLoading ? questionsLoading.message : 'Generate Interview Questions'}
+                  </button>
+                </div>
+
+                {/* Loading Indicator */}
+                {questionsLoading.isLoading && (
+                  <div className="mb-6">
+                    <LoadingSpinner
+                      message={questionsLoading.message}
+                      size="medium"
+                    />
+                    {questionsLoading.subMessage && (
+                      <p className="text-center text-sm text-gray-600 mt-2">{questionsLoading.subMessage}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Generated Questions Display */}
+                {interviewQuestions && (
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-300">
+                    <h3 className="font-semibold text-gray-900 mb-2 text-left">
+                      Generated Interview Questions
+                    </h3>
+                    <div className="text-gray-700 prose prose-sm max-w-none text-left">
+                      <Markdown>{interviewQuestions}</Markdown>
+                    </div>
+                  </div>
+                )}
+
+                {/* Divider */}
+                <div className="my-8 border-t-2 border-gray-300"></div>
+
+                {/* Mock Interview Section */}
+                <h3 className="font-semibold text-gray-900 mb-4 text-xl">
+                  Mock Interview Practice
+                </h3>
                 <p className="text-gray-600 mb-4">
-                  Practice interview questions and get AI-powered feedback with ratings. Answer using voice or text.
+                  Practice answering interview questions and get AI-powered feedback. Answer using voice or text.
                 </p>
 
                 {/* Microphone Permission Info */}
-                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <p className="text-sm text-blue-800">
-                    🎤 <strong>Voice Input:</strong> Using Gemini Nano's built-in audio transcription. Click "Start Voice Recording" to begin. You'll be prompted for microphone permission on first use.
+                <div className="mb-4 p-3 bg-gray-100 rounded-lg border border-gray-300">
+                  <p className="text-sm text-gray-700">
+                    <strong>Voice Input:</strong> Using Gemini Nano's built-in audio transcription. Click "Start Voice Recording" to begin. You'll be prompted for microphone permission on first use.
                   </p>
                 </div>
 
                 {/* Questions List Section */}
                 {questionsList.length > 0 && (
-                  <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
-                      📝 Generated Interview Questions ({questionsList.length})
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-300">
+                    <h3 className="font-semibold text-gray-900 mb-3">
+                      Generated Interview Questions ({questionsList.length})
                     </h3>
                     <div className="space-y-2 max-h-64 overflow-y-auto">
                       {questionsList.map((question, index) => (
@@ -1112,8 +1242,8 @@ function App() {
                           onClick={() => handleSelectQuestion(index)}
                           className={`w-full text-left p-3 rounded-lg border transition-colors ${
                             currentQuestionIndex === index
-                              ? 'bg-purple-600 text-white border-purple-700'
-                              : 'bg-white text-gray-700 border-gray-200 hover:bg-purple-100'
+                              ? 'bg-gray-900 text-white border-gray-900'
+                              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
                           }`}
                         >
                           <span className="font-medium">Q{index + 1}:</span> {question}
@@ -1125,8 +1255,8 @@ function App() {
 
                 {/* Add Custom Question Section */}
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                    ➕ Add Custom Question
+                  <h3 className="font-semibold text-gray-900 mb-2">
+                    Add Custom Question
                   </h3>
                   <div className="flex gap-2">
                     <input
@@ -1134,7 +1264,7 @@ function App() {
                       value={customQuestion}
                       onChange={(e) => setCustomQuestion(e.target.value)}
                       placeholder="Enter your own interview question..."
-                      className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           handleAddCustomQuestion();
@@ -1143,7 +1273,7 @@ function App() {
                     />
                     <button
                       onClick={handleAddCustomQuestion}
-                      className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+                      className="bg-gray-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-800 transition-colors"
                     >
                       Add
                     </button>
@@ -1152,25 +1282,25 @@ function App() {
 
                 {/* Current Question Display */}
                 {currentQuestionIndex >= 0 && (
-                  <div className="mb-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-300">
+                  <div className="mb-4 p-4 bg-gray-100 rounded-lg border-2 border-gray-400">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold text-blue-900">
+                      <h3 className="font-semibold text-gray-900">
                         Question {currentQuestionIndex + 1} of {questionsList.length}
                       </h3>
                       <div className="flex gap-2">
                         <button
                           onClick={handlePreviousQuestion}
                           disabled={currentQuestionIndex === 0}
-                          className="px-3 py-1 text-sm bg-white rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          ← Previous
+                          Previous
                         </button>
                         <button
                           onClick={handleNextQuestion}
                           disabled={currentQuestionIndex === questionsList.length - 1}
-                          className="px-3 py-1 text-sm bg-white rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Next →
+                          Next
                         </button>
                       </div>
                     </div>
@@ -1188,7 +1318,7 @@ function App() {
                       value={mockQuestion}
                       onChange={(e) => setMockQuestion(e.target.value)}
                       placeholder="Enter the interview question you want to practice..."
-                      className="w-full h-24 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                      className="w-full h-24 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent resize-none"
                       disabled={availability !== 'available'}
                     />
                   </div>
@@ -1203,7 +1333,7 @@ function App() {
                     value={mockAnswer}
                     onChange={(e) => setMockAnswer(e.target.value)}
                     placeholder="Type your answer or use voice input..."
-                    className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent resize-none"
                     disabled={availability !== 'available' || isRecording}
                   />
                   <p className="text-sm text-gray-500 mt-1">
@@ -1211,22 +1341,50 @@ function App() {
                   </p>
                 </div>
 
+                {/* Recording Status Banner */}
+                {isRecording && (
+                  <div className="mb-4 p-4 bg-red-50 border-2 border-red-500 rounded-lg">
+                    <div className="flex items-center justify-center gap-3">
+                      <span className="flex h-4 w-4">
+                        <span className="animate-ping absolute inline-flex h-4 w-4 rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500"></span>
+                      </span>
+                      <p className="text-red-700 font-semibold">Recording in progress... Speak clearly</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Audio Transcription Loading */}
+                {audioLoading.isLoading && (
+                  <div className="mb-4">
+                    <LoadingSpinner
+                      message={audioLoading.message}
+                      size="medium"
+                    />
+                    {audioLoading.subMessage && (
+                      <p className="text-center text-sm text-gray-600 mt-2">{audioLoading.subMessage}</p>
+                    )}
+                  </div>
+                )}
+
                 {/* Voice Recording Controls */}
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   {!isRecording ? (
                     <button
                       onClick={startVoiceRecording}
                       disabled={availability !== 'available'}
-                      className="bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                      className="bg-gray-900 text-white py-3 rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                     >
-                      🎤 Start Voice Recording
+                      <span className="inline-block w-3 h-3 bg-red-500 rounded-full"></span>
+                      Start Voice Recording
                     </button>
                   ) : (
                     <button
                       onClick={stopVoiceRecording}
-                      className="bg-gray-600 text-white py-3 rounded-lg font-medium hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 animate-pulse"
+                      className="bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
                     >
-                      ⏹️ Stop Recording
+                      <span className="inline-block w-3 h-3 bg-white rounded-full animate-pulse"></span>
+                      Stop Recording
                     </button>
                   )}
                   <button
@@ -1234,27 +1392,40 @@ function App() {
                     disabled={isRecording || !mockAnswer}
                     className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    🗑️ Clear Answer
+                    Clear Answer
                   </button>
                 </div>
 
                 {/* Evaluate Button */}
                 <button
                   onClick={handleEvaluateMockAnswer}
-                  disabled={mockLoading || availability !== 'available' || isRecording || !mockQuestion.trim() || !mockAnswer.trim()}
-                  className="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  disabled={mockLoading.isLoading || availability !== 'available' || isRecording || !mockQuestion.trim() || !mockAnswer.trim()}
+                  className="w-full bg-gray-900 text-white py-3 rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {mockLoading ? '⏳ Evaluating...' : '🎯 Get AI Feedback & Rating'}
+                  {mockLoading.isLoading ? mockLoading.message : 'Get AI Feedback & Rating'}
                 </button>
+
+                {/* Loading Indicator */}
+                {mockLoading.isLoading && (
+                  <div className="mt-6">
+                    <LoadingSpinner
+                      message={mockLoading.message}
+                      size="medium"
+                    />
+                    {mockLoading.subMessage && (
+                      <p className="text-center text-sm text-gray-600 mt-2">{mockLoading.subMessage}</p>
+                    )}
+                  </div>
+                )}
 
                 {/* Feedback Result */}
                 {mockFeedback && (
-                  <div className="mt-6 p-5 bg-purple-50 rounded-lg border-2 border-purple-200">
-                    <h3 className="font-semibold text-purple-900 mb-3">
+                  <div className="mt-6 p-5 bg-gray-50 rounded-lg border-2 border-gray-300">
+                    <h3 className="font-semibold text-gray-900 mb-3">
                       AI Feedback
                     </h3>
                     <div className="text-gray-700 prose prose-sm max-w-none">
-                      <ReactMarkdown>{mockFeedback}</ReactMarkdown>
+                      <Markdown>{mockFeedback}</Markdown>
                     </div>
                   </div>
                 )}
@@ -1269,7 +1440,7 @@ function App() {
             &copy; 2025 InterviewCoach.AI. All rights reserved.
           </p>
           <p>
-            Built with ❤️ by Siddhesh Shirdhankar. Check out the <a href="https://github.com/Sid-1819/interview-coach-ai" target="_blank" className="text-purple-600 hover:underline">GitHub repo</a> for more info.
+            Built with ❤️  by <a className="text-gray-600" href="https://www.linkedin.com/in/siddhesh-shirdhankar-8024871a7/" target="_blank">Siddhesh Shirdhankar</a>. Check out the <a href="https://github.com/Sid-1819/interview-coach-ai" target="_blank" className="text-gray-600 hover:underline">GitHub repo</a> for more info.
           </p>
         </div>
       </div>
