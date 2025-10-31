@@ -1,15 +1,13 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import { GeminiClient } from "./utils/geminiClient";
+import ReactMarkdown from "react-markdown";
 
 function App() {
   const [status, setStatus] = useState("Checking API availability...");
   const [availability, setAvailability] = useState<string>("");
-  const [inputText, setInputText] = useState("");
-  const [_, setFeedbackResult] = useState("");
-  const [improveResult, setImproveResult] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'interview-prep' | 'feedback' | 'improve' | 'mock-interview'>('interview-prep');
+  const [activeTab, setActiveTab] = useState<'interview-prep' | 'mock-interview'>('interview-prep');
   const [geminiClient, setGeminiClient] = useState<GeminiClient | null>(null);
 
   // Interview Prep states
@@ -21,6 +19,7 @@ function App() {
   const [resumeFilename, setResumeFilename] = useState<string | null>(null);
   const [coverLetterResult, setCoverLetterResult] = useState("");
   const [coverLetterLoading, setCoverLetterLoading] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   // Mock Interview states
   const [mockQuestion, setMockQuestion] = useState("");
   const [mockAnswer, setMockAnswer] = useState("");
@@ -139,14 +138,6 @@ function App() {
             setActiveTab('interview-prep');
             // Auto-generate immediately with the text
             handleGenerateQuestions(text);
-          } else if (action === 'get-feedback') {
-            setInputText(text);
-            setActiveTab('feedback');
-            // Auto-get feedback immediately with the text
-            handleGetFeedback(text);
-          } else if (action === 'improve-text') {
-            setInputText(text);
-            setActiveTab('improve');
           }
 
           // Clear the action after processing
@@ -207,69 +198,6 @@ function App() {
       }
     }, 5000); // Check every 5 seconds
   }
-
-  async function handleGetFeedback(textOverride?: string) {
-    const text = textOverride || inputText;
-    if (!text.trim()) {
-      alert('Please enter some text first!');
-      return;
-    }
-
-    setLoading(true);
-    setFeedbackResult('');
-    setStatus('🤔 Getting AI feedback...');
-
-    try {
-      // Use existing client or initialize
-      let client = geminiClient;
-      if (!client) {
-        client = new GeminiClient();
-        await client.initializeSession();
-        setGeminiClient(client);
-      }
-
-      const feedback = await client.getInterviewFeedback(text);
-      setFeedbackResult(feedback);
-      setStatus('✅ Feedback received!');
-    } catch (error) {
-      setFeedbackResult(`Error: ${error}`);
-      setStatus('❌ Failed to get feedback.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleImproveText(style: 'professional' | 'casual' | 'concise', textOverride?: string) {
-    const text = textOverride || inputText;
-    if (!text.trim()) {
-      alert('Please enter some text first!');
-      return;
-    }
-
-    setLoading(true);
-    setImproveResult('');
-    setStatus(`✍️ Improving text (${style} style)...`);
-
-    try {
-      // Use existing client or initialize
-      let client = geminiClient;
-      if (!client) {
-        client = new GeminiClient();
-        await client.initializeSession();
-        setGeminiClient(client);
-      }
-
-      const improved = await client.improveText(text, style);
-      setImproveResult(improved);
-      setStatus('✅ Text improved!');
-    } catch (error) {
-      setImproveResult(`Error: ${error}`);
-      setStatus('❌ Failed to improve text.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
 
   async function handleAnalyzeJobDescription(textOverride?: string) {
     const text = textOverride || jobDescription;
@@ -397,8 +325,7 @@ function App() {
       const response = await fetch(apiUrl, {
         method: 'POST',
         body: formData,
-        // Add timeout to detect if API is not available
-        signal: AbortSignal.timeout(60000), // 10 second timeout
+        signal: AbortSignal.timeout(60000), 
       });
 
       if (!response.ok) {
@@ -474,7 +401,7 @@ function App() {
         setGeminiClient(client);
       }
 
-  const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). Make sure you wrap up the cover letter in 250 to 300 words.`;
+  const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). IMPORTANT: Keep the cover letter under 250 words.`;
 
   const userPrompt = `---\nJob Description Analysis:\n${jdAnalysisResult}\n\n---\nApplicant Resume:\n${resumeText}\n\n---\nWrite a cover letter for this candidate applying to the job described above. Reference both the job requirements and the candidate's relevant experience. Make the letter unique to this application.`;
 
@@ -489,6 +416,25 @@ function App() {
       setCoverLetterResult(`Error: ${String(error)}`);
     } finally {
       setCoverLetterLoading(false);
+    }
+  }
+
+  /**
+   * Copy cover letter to clipboard
+   */
+  async function handleCopyCoverLetter() {
+    try {
+      await navigator.clipboard.writeText(coverLetterResult);
+      setCopySuccess(true);
+      setStatus('✅ Cover letter copied to clipboard!');
+
+      // Reset copy success after 2 seconds
+      setTimeout(() => {
+        setCopySuccess(false);
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      setStatus('❌ Failed to copy to clipboard');
     }
   }
 
@@ -626,9 +572,7 @@ function App() {
 
   const tabs = [
     { id: 'interview-prep', label: '🎯 Interview Prep', icon: '📋' },
-    { id: 'mock-interview', label: '🎤 Mock Interview', icon: '🎙️' },
-    { id: 'feedback', label: '💬 Answer Feedback', icon: '🎤' },
-    { id: 'improve', label: '✍️ Improve Text', icon: '✨' }
+    { id: 'mock-interview', label: '🎤 Mock Interview', icon: '🎙️' }
   ] as const;
 
   // Check if running in iframe (sidebar mode)
@@ -760,7 +704,9 @@ function App() {
                     <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
                       🔍 Job Description Analysis
                     </h3>
-                    <div className="text-gray-700 whitespace-pre-wrap">{jdAnalysisResult}</div>
+                    <div className="text-gray-700 prose prose-sm max-w-none">
+                      <ReactMarkdown>{jdAnalysisResult}</ReactMarkdown>
+                    </div>
                   </div>
                 )}
 
@@ -769,7 +715,9 @@ function App() {
                     <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
                       💭 Likely Interview Questions
                     </h3>
-                    <div className="text-gray-700 whitespace-pre-wrap">{interviewQuestions}</div>
+                    <div className="text-gray-700 prose prose-sm max-w-none">
+                      <ReactMarkdown>{interviewQuestions}</ReactMarkdown>
+                    </div>
                     <button
                       onClick={() => setActiveTab('mock-interview')}
                       className="mt-4 w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
@@ -833,35 +781,38 @@ function App() {
 
                   {coverLetterResult && (
                     <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
-                      <h4 className="font-semibold mb-2">Generated Cover Letter</h4>
-                      <div className="text-gray-800 whitespace-pre-wrap">{coverLetterResult}</div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold">Generated Cover Letter</h4>
+                        <button
+                          onClick={handleCopyCoverLetter}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
+                            copySuccess
+                              ? 'bg-green-600 text-white'
+                              : 'bg-purple-600 text-white hover:bg-purple-700'
+                          }`}
+                        >
+                          {copySuccess ? (
+                            <>
+                              ✓ 
+                            </>
+                          ) : (
+                            <>
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="text-gray-800 prose prose-sm max-w-none">
+                        <ReactMarkdown>{coverLetterResult}</ReactMarkdown>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
             )}
-
-            {/* Feedback Tab */}
-            {/* {activeTab === 'feedback' && (
-              <div>
-                <p className="text-gray-600 mb-4">
-                  Get AI-powered feedback on your interview responses, including analysis of clarity, structure, and communication style.
-                </p>
-                <button
-                  onClick={() => handleGetFeedback()}
-                  disabled={loading || availability !== 'available'}
-                  className="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? '⏳ Processing...' : '🎯 Get AI Feedback'}
-                </button>
-                {feedbackResult && (
-                  <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <h3 className="font-semibold text-purple-900 mb-2">AI Feedback:</h3>
-                    <p className="text-gray-700 whitespace-pre-wrap">{feedbackResult}</p>
-                  </div>
-                )}
-              </div>
-            )} */}
 
             {/* Mock Interview Tab */}
             {activeTab === 'mock-interview' && (
@@ -1031,45 +982,9 @@ function App() {
                     <h3 className="font-semibold text-purple-900 mb-3 text-lg flex items-center gap-2">
                       📊 AI Evaluation & Feedback
                     </h3>
-                    <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">{mockFeedback}</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Improve Tab */}
-            {activeTab === 'improve' && (
-              <div>
-                <p className="text-gray-600 mb-4">
-                  Enhance your text with different writing styles.
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    onClick={() => handleImproveText('professional')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    💼 Professional
-                  </button>
-                  <button
-                    onClick={() => handleImproveText('casual')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    😊 Casual
-                  </button>
-                  <button
-                    onClick={() => handleImproveText('concise')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-orange-600 text-white py-3 rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    ✂️ Concise
-                  </button>
-                </div>
-                {improveResult && (
-                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <h3 className="font-semibold text-blue-900 mb-2">Improved Text:</h3>
-                    <p className="text-gray-700 whitespace-pre-wrap">{improveResult}</p>
+                    <div className="text-gray-800 prose prose-sm max-w-none">
+                      <ReactMarkdown>{mockFeedback}</ReactMarkdown>
+                    </div>
                   </div>
                 )}
               </div>
