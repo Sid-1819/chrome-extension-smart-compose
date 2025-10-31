@@ -1,6 +1,6 @@
 # InterviewCoach.AI - Chrome Extension
 
-> AI-powered writing assistant using Chrome's built-in Gemini Nano (on-device AI)
+> AI-powered interview preparation assistant using Chrome's built-in Gemini Nano (on-device AI)
 
 [![Chrome Version](https://img.shields.io/badge/Chrome-127%2B-blue)](https://www.google.com/chrome/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -10,13 +10,15 @@
 - ✅ **No API Key Required** - Uses Chrome's built-in Prompt API
 - 🔒 **100% Private** - All AI processing happens on your device
 - ⚡ **Lightning Fast** - No network latency, works offline
-- 🎯 **Interview Coaching** - Get AI feedback on your interview responses
-- ✍️ **Text Improvement** - Enhance writing with professional/casual/concise styles
-- 📝 **Proofreading** - Fix grammar, spelling, and punctuation
-- 📊 **Summarization** - Create concise summaries of long text
-- 🌍 **Translation** - Translate text to multiple languages
-- 🎨 **Beautiful UI** - Floating feedback button with modal panel
-- 🌐 **Works Everywhere** - YouTube, Google Meet, and all web pages
+- 📋 **Job Description Analysis** - Extract key responsibilities, required skills, and technical stack
+- 💭 **Interview Question Generator** - Generate tailored interview questions based on job descriptions
+- 🎙️ **Mock Interview Practice** - Practice answering questions with voice or text input
+- 🎤 **Voice Transcription** - Record your answers and get them transcribed using on-device AI
+- 📄 **Resume Parsing** - Upload resumes in multiple formats (TXT, MD, PDF, DOCX, PNG, JPG)
+- 🖼️ **Image Text Extraction** - Extract text from resume images using AI
+- ✉️ **Cover Letter Generator** - Create personalized cover letters based on job descriptions and your resume
+- 🎯 **AI Feedback & Rating** - Get detailed evaluation and ratings (out of 10) on your mock interview answers
+- 🌐 **Context Menu Integration** - Right-click any job description on the web to analyze it instantly
 
 ## 🎯 Quick Start
 
@@ -42,8 +44,8 @@
 
 ```bash
 # Clone repository
-git clone <repository-url>
-cd chrome-extension-smart-compose
+git clone https://github.com/Sid-1819/interview-coach-ai.git
+cd interview-coach-ai
 
 # Install dependencies
 pnpm install
@@ -61,94 +63,123 @@ pnpm run build
 
 ## 💡 How to Use
 
-### Automatic Text Capture
+### Method 1: Using the Side Panel (Main Interface)
 
-1. Visit any webpage (YouTube, Google Meet, or any site with text inputs)
-2. Start typing in a text field
-3. The floating **"Get AI Feedback"** button appears after you:
-   - Stop typing for 1 second, OR
-   - Press Enter
+1. **Click the extension icon** in your Chrome toolbar to open the side panel
+2. You'll see two tabs:
+   - **Interview Prep** - Analyze job descriptions, generate questions, create cover letters
+   - **Mock Interview** - Practice answering questions with voice or text
 
-### Get AI Feedback
+### Method 2: Context Menu (Quick Access)
 
-1. Click the **"Get AI Feedback"** button
-2. Wait a moment for on-device AI processing
-3. View feedback in a beautiful modal panel
-4. Get insights on:
-   - Clarity and structure
-   - Relevance and completeness
-   - Communication style
-   - Actionable improvements
+1. **Select any job description text** on any webpage
+2. **Right-click** and choose from the InterviewCoach.AI menu:
+   - 🔍 **Analyze Job Description** - Extracts key skills, responsibilities, and requirements
+   - 💭 **Generate Interview Questions** - Creates tailored questions for the role
+   - 💬 **Get Answer Feedback** - Get feedback on your interview answer
+   - ✨ **Improve Text** - Improve any selected text
+3. The side panel will open automatically with results
 
-### From Popup/Code
+## 🎯 Feature Guide
 
-```typescript
-// Request feedback
-chrome.runtime.sendMessage({
-  type: 'REQUEST_FEEDBACK',
-  text: 'Your text here'
-}, (response) => {
-  console.log(response.feedback);
-});
+### Interview Prep Tab
 
-// Improve text
-chrome.runtime.sendMessage({
-  type: 'IMPROVE_TEXT',
-  text: 'Text to improve',
-  options: { style: 'professional' }
-}, (response) => {
-  console.log(response.result);
-});
+#### 1. Job Description Analysis
+- Paste a job description in the text area
+- Click **"Analyze JD"** to extract:
+  - Key responsibilities
+  - Must-have and nice-to-have skills
+  - Technical stack requirements
+  - Years of experience required
+  - What to emphasize in the interview
 
-// Proofread
-chrome.runtime.sendMessage({
-  type: 'PROOFREAD',
-  text: 'Text with erors'
-}, (response) => {
-  console.log(response.result);
-});
+#### 2. Interview Question Generation
+- After pasting a job description, click **"Generate Questions"**
+- Get 10 tailored questions categorized by:
+  - Behavioral (STAR method)
+  - Technical (specific to the role)
+  - Situational/Problem-solving
 
-// Summarize
-chrome.runtime.sendMessage({
-  type: 'SUMMARIZE',
-  text: 'Long text...',
-  options: { length: 'medium' }
-}, (response) => {
-  console.log(response.result);
-});
+#### 3. Resume & Cover Letter
+- **Upload your resume** (supports TXT, MD, PDF, DOCX, or images)
+  - Plain text files (TXT, MD) are processed instantly
+  - PDF/DOCX files are parsed using cloud API
+  - Image files (PNG, JPG) use on-device AI for text extraction
+- **Create Cover Letter**:
+  1. Analyze a job description first
+  2. Upload/paste your resume
+  3. Click **"Create Cover Letter"**
+  4. Get a personalized, job-specific cover letter
+  5. Click **"Copy"** to copy to clipboard
 
-// Translate
-chrome.runtime.sendMessage({
-  type: 'TRANSLATE',
-  text: 'Hello world',
-  options: { targetLanguage: 'Spanish' }
-}, (response) => {
-  console.log(response.result);
-});
-```
+### Mock Interview Tab
+
+#### 1. Use Generated Questions
+- Questions from the Interview Prep tab automatically appear here
+- Click any question to select it for practice
+
+#### 2. Add Custom Questions
+- Enter your own interview question in the custom question field
+- Click **"Add"** to add it to the list
+
+#### 3. Answer Questions
+- **Type your answer** in the text area, OR
+- **Use voice input**:
+  1. Click **"Start Voice Recording"**
+  2. Grant microphone permission if prompted
+  3. Speak your answer clearly
+  4. Click **"Stop Recording"** when done
+  5. Your answer will be transcribed automatically
+
+#### 4. Get AI Feedback
+- Click **"Get AI Feedback & Rating"** after answering
+- Receive detailed evaluation with:
+  - **Rating** out of 10
+  - **Strengths** in your answer
+  - **Areas for Improvement** with actionable advice
+  - **Key Takeaways** for next time
+  - **Suggested Enhancement** (if needed)
+
+#### 5. Navigate Questions
+- Use **"Previous"** and **"Next"** buttons to move through questions
+- Track your progress (e.g., "Question 3 of 10")
 
 ## 🏗️ Architecture
 
 ```
 src/
-├── content/
-│   └── content.ts          # Content script (monitors inputs, shows UI)
+├── App.tsx                  # Main UI (side panel with Interview Prep & Mock Interview tabs)
+├── main.tsx                 # React entry point
+├── mic-permission.tsx       # Microphone permission handler
 ├── background/
-│   └── background.ts       # Background worker (handles AI requests)
+│   └── background.ts        # Background worker (context menus, storage, side panel)
+├── content/
+│   └── content.ts           # Content script (context menu integration, nudge badges)
 ├── utils/
-│   └── geminiClient.ts     # Prompt API client (manages AI sessions)
-├── popup/
-│   └── popup.tsx           # Extension popup UI
+│   └── geminiClient.ts      # Prompt API client (AI sessions, multimodal support)
 └── ...
 ```
 
-### Message Flow
+### Key Components
 
-```
-User Input → Content Script → Background Script → Prompt API → Gemini Nano
-                                                                    ↓
-User sees feedback ← Content Script ← Background Script ← AI Response
-```
+- **Side Panel (App.tsx)**: Main interface with two tabs
+  - Interview Prep tab: Job description analysis, question generation, cover letter creation
+  - Mock Interview tab: Question practice with voice/text input and AI feedback
+
+- **GeminiClient**: Handles all AI operations using Chrome's Prompt API
+  - Text generation (job analysis, questions, cover letters, feedback)
+  - Audio transcription (voice recording → text)
+  - Image text extraction (resume images → text)
+  - Multimodal input support (text, audio, image)
+
+- **Background Service**: Manages extension state
+  - Context menu actions
+  - Chrome storage
+  - Side panel opening/closing
+
+- **Content Script**: Integrates with web pages
+  - Detects text selection for context menu
+  - Shows nudge badges when actions are ready
 
 ## 🛠️ Development
 
@@ -171,79 +202,140 @@ pnpm run build  # (includes TypeScript check)
 
 ## 📚 Documentation
 
-- [PROMPT_API_SETUP.md](PROMPT_API_SETUP.md) - Detailed setup instructions
-- [USAGE.md](USAGE.md) - Complete usage guide with examples
-- [API_KEY_SETUP.md](API_KEY_SETUP.md) - ~~Deprecated~~ (no API key needed!)
+- [PROMPT_API_SETUP.md](PROMPT_API_SETUP.md) - Detailed setup instructions for Gemini Nano
+- This README - Complete usage guide with all features explained
 
 ## 🔧 Troubleshooting
 
-### "Prompt API not supported"
+### Gemini Nano Setup Issues
+
+#### "Prompt API not supported"
 - Upgrade to Chrome 127+
 - Try Chrome Dev/Canary/Beta
 - Verify you enabled both required flags
 
-### "Gemini Nano is not available"
+#### "Gemini Nano is not available"
 - Check flags are enabled correctly
 - Restart Chrome after enabling flags
 - Wait for model download to complete
 - Verify in console: `await window.LanguageModel.availability()`
 
-### Model download stuck
+#### Model download stuck
 - Keep Chrome running in foreground
 - Check internet connection
 - Ensure 1-2GB free disk space
 - Check notifications for download progress
 
+### Voice Recording Issues
+
+#### Microphone permission denied
+- Click the microphone icon in Chrome's address bar
+- Select "Always allow" for this extension
+- Reload the extension and try again
+
+#### Recording fails or no audio captured
+- Check if your microphone is working in other apps
+- Try a different microphone if available
+- Check Chrome's site settings (chrome://settings/content/microphone)
+
+#### Transcription fails
+- Ensure audio is clear and not too long (keep under 2 minutes)
+- Speak clearly and at a moderate pace
+- Check that Gemini Nano has audio input enabled
+
+### Resume Parsing Issues
+
+#### "Failed to parse resume"
+- For PDF/DOCX: Ensure internet connection (uses cloud API)
+- Try pasting the text directly instead
+- For images: Ensure image is clear and text is readable
+
+#### Text extraction incomplete
+- Use high-resolution images
+- Ensure good contrast between text and background
+- Try uploading as PDF instead if available
+- Manually paste missing sections
+
+### Context Menu Not Working
+
+#### Right-click menu doesn't show
+- Refresh the webpage
+- Make sure you've selected text before right-clicking
+- Reload the extension (chrome://extensions → reload)
+
+#### Side panel doesn't open
+- Click the extension icon manually
+- Check if popup blockers are interfering
+- Try restarting Chrome
+
 📖 **More help:** See [PROMPT_API_SETUP.md](PROMPT_API_SETUP.md#-troubleshooting)
 
-## 🎨 Supported Sites
+## 🌐 Usage Across Websites
 
-Works on **all websites**, with special detection for:
-- ✅ YouTube (comments, search)
-- ✅ Google Meet (chat)
-- ✅ Any webpage with text inputs/textareas
-- ✅ Contenteditable elements
-- ✅ Rich text editors
+The extension works on **all websites** via:
+- ✅ **Side Panel** - Always accessible by clicking the extension icon
+- ✅ **Context Menu** - Right-click any selected text on any webpage
+- ✅ **Job Boards** - Analyze job descriptions from LinkedIn, Indeed, Glassdoor, etc.
+- ✅ **Company Career Pages** - Extract job requirements directly from career sites
+- ✅ **Email** - Analyze job descriptions received via email
 
 ## 🔒 Privacy & Security
 
-- ✅ **100% On-Device** - All AI runs locally, nothing sent to servers
-- ✅ **No API Keys** - No external API credentials needed
-- ✅ **No Data Collection** - Your text never leaves your device
-- ✅ **Works Offline** - Once model is downloaded, no internet needed
+- ✅ **On-Device AI** - All AI processing (Gemini Nano) runs locally on your device
+- ✅ **No API Keys** - No external API credentials needed for core features
+- ✅ **Privacy-First** - Job descriptions, answers, and feedback never leave your device
+- ✅ **Microphone Permission** - Voice recording stays on-device, only you control it
 - ✅ **Open Source** - Fully auditable code
+- ⚠️ **Resume Parsing** - PDF/DOCX files and image fallback use a cloud API for parsing
+  - TXT/MD files are processed locally
+  - Image resumes first attempt on-device extraction, fallback to cloud if needed
+  - You can always paste text directly to avoid cloud processing
 
 ## ⚡ Performance
 
 | Metric | Value |
 |--------|-------|
 | Model Size | 1-2GB (one-time download) |
-| RAM Usage | 500MB-1GB (during use) |
-| Response Time | <1s for most queries |
+| RAM Usage | 500MB-1GB (during AI use) |
+| Response Time | <1-3s for most queries |
 | Context Window | ~4000 tokens per session |
-| Offline Capable | ✅ Yes |
+| Audio Transcription | ~2-5s (depends on length) |
+| Image Text Extraction | ~3-8s (depends on complexity) |
+| Resume Parsing (Cloud) | ~5-15s (PDF/DOCX) |
+| Offline Capable | ✅ Yes (except PDF/DOCX parsing) |
 
 ## 🌟 Advanced Features
 
-### Session Management
+### Multimodal AI Support
+- **Text Input**: Job descriptions, questions, answers
+- **Audio Input**: Voice recording and transcription for interview practice
+- **Image Input**: Extract text from resume images (PNG, JPG, etc.)
+- All powered by Chrome's Prompt API with on-device processing
+
+### Smart Session Management
 - Automatic session reuse for efficiency
+- Multimodal session initialization with audio and image support
 - Context preservation across prompts
 - Token usage monitoring
-- Automatic cleanup of unused sessions
 
-### Custom Configuration
-```typescript
-const client = new GeminiClient({
-  temperature: 1.2,  // Creativity (0-2)
-  topK: 40,          // Token selection (1-128)
-  systemPrompt: 'You are a helpful assistant...'
-});
-```
+### Resume Parsing Pipeline
+1. **Client-Side** (TXT, MD): Instant processing, no network needed
+2. **On-Device AI** (Images): Attempts text extraction using Prompt API first
+3. **Cloud API Fallback** (PDF, DOCX, Images): Uses Vercel API when needed
+4. **Manual Paste**: Always available as an alternative
 
-### Download Progress
-The extension shows notifications during Gemini Nano download:
-- "Downloading AI Model: 45%"
-- "AI Model Ready!"
+### Voice Recording Features
+- Microphone permission handling with dedicated UI
+- Supports multiple audio formats (WebM, OGG, MP4, WAV)
+- Real-time recording status and feedback
+- Automatic transcription using Gemini Nano's audio input
+- No audio data sent to external servers
+
+### Context Menu Integration
+- Right-click any text on any webpage
+- Instant analysis of selected job descriptions
+- Side panel opens automatically with results
+- Badge notifications for completed actions
 
 ## 🤝 Contributing
 
@@ -265,22 +357,32 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Uses Chrome's [Prompt API](https://developer.chrome.com/docs/ai/built-in-apis)
 - Powered by [Gemini Nano](https://deepmind.google/technologies/gemini/nano/)
 - Styled with [Tailwind CSS](https://tailwindcss.com/)
+- Markdown rendering with [React Markdown](https://github.com/remarkjs/react-markdown)
+- Resume parsing via [Vercel Functions](https://vercel.com/docs/functions)
 
 ## 📞 Support
 
 - 📖 [Documentation](PROMPT_API_SETUP.md)
-- 🐛 [Report Issues](https://github.com/your-repo/issues)
-- 💬 [Discussions](https://github.com/your-repo/discussions)
+- 🐛 [Report Issues](https://github.com/Sid-1819/interview-coach-ai/issues)
+- 💬 [Discussions](https://github.com/Sid-1819/interview-coach-ai/discussions)
+- 💡 [GitHub Repository](https://github.com/Sid-1819/interview-coach-ai)
 
 ## 🔮 Roadmap
 
-- [ ] Add streaming responses for real-time feedback
-- [ ] Support for more languages
-- [ ] Custom system prompts per website
-- [ ] Voice input support
-- [ ] Image analysis capabilities
-- [ ] Browser action popup with history
-- [ ] Keyboard shortcuts
+- [x] Voice input support with transcription
+- [x] Image analysis for resume text extraction
+- [x] Context menu integration
+- [x] Side panel interface
+- [ ] Streaming responses for real-time feedback
+- [ ] Interview session history and progress tracking
+- [ ] Export interview practice results
+- [ ] Custom question templates
+- [ ] Multiple resume profiles
+- [ ] Company research integration
+- [ ] Keyboard shortcuts for quick access
+- [ ] Answer comparison (your answer vs. suggested improvements)
+- [ ] STAR method structuring assistant
+- [ ] Salary negotiation guidance
 
 ---
 
