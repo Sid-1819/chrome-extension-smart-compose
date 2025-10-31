@@ -15,6 +15,8 @@ export interface PromptAPIConfig {
   topK?: number;
   systemPrompt?: string;
   onDownloadProgress?: (progress: number) => void;
+  expectedInputs?: Array<{ type: 'text' | 'image' | 'audio'; languages?: string[] }>;
+  expectedOutputs?: Array<{ type: 'text'; languages?: string[] }>;
 }
 
 export interface PromptMessage {
@@ -55,9 +57,9 @@ export class GeminiClient {
   }
 
   /**
-   * Initialize session with optional system prompt
+   * Initialize session with optional system prompt and modality settings
    */
-  async initializeSession(systemPrompt?: string): Promise<void> {
+  async initializeSession(systemPrompt?: string, options?: { enableAudioInput?: boolean }): Promise<void> {
     if (!window.LanguageModel) {
       throw new Error('Prompt API is not supported in this browser');
     }
@@ -81,8 +83,8 @@ export class GeminiClient {
       });
     }
 
-    // Create session with monitoring for downloads
-    this.session = await window.LanguageModel.create({
+    // Configure expected inputs and outputs for multimodal support
+    const sessionConfig: any = {
       temperature: this.config.temperature || params.defaultTemperature,
       topK: this.config.topK || params.defaultTopK,
       initialPrompts: initialPrompts.length > 0 ? initialPrompts : undefined,
@@ -95,16 +97,44 @@ export class GeminiClient {
           }
         });
       }
+    };
+
+    // Add audio input support if requested
+    if (options?.enableAudioInput || this.config.expectedInputs) {
+      sessionConfig.expectedInputs = this.config.expectedInputs || [
+        { type: 'text', languages: ['en'] },
+        { type: 'audio', languages: ['en'] }
+      ];
+      sessionConfig.expectedOutputs = this.config.expectedOutputs || [
+        { type: 'text', languages: ['en'] }
+      ];
+      console.log('🔧 [SESSION] Configuring session with audio input support:', {
+        expectedInputs: sessionConfig.expectedInputs,
+        expectedOutputs: sessionConfig.expectedOutputs
+      });
+    }
+
+    // Create session with monitoring for downloads
+    console.log('🔧 [SESSION] Creating Prompt API session with config:', {
+      temperature: sessionConfig.temperature,
+      topK: sessionConfig.topK,
+      hasInitialPrompts: !!sessionConfig.initialPrompts,
+      hasExpectedInputs: !!sessionConfig.expectedInputs,
+      hasExpectedOutputs: !!sessionConfig.expectedOutputs
     });
+
+    this.session = await window.LanguageModel.create(sessionConfig);
 
     // Store initial prompts in conversation history
     this.conversationHistory = [...initialPrompts];
 
-    console.log('Prompt API session initialized', {
+    console.log('🔧 [SESSION] ✅ Prompt API session initialized successfully', {
       temperature: this.config.temperature || params.defaultTemperature,
       topK: this.config.topK || params.defaultTopK,
+      audioInputEnabled: !!sessionConfig.expectedInputs,
       inputQuota: this.session.inputQuota,
-      inputUsage: this.session.inputUsage
+      inputUsage: this.session.inputUsage,
+      sessionType: this.session.constructor.name
     });
   }
 
@@ -564,6 +594,205 @@ Write a professional, warm email (3-4 paragraphs):
 Email draft:`;
 
     return this.generateContent(prompt, systemPrompt);
+  }
+
+  /**
+   * Transcribe audio to text using Prompt API's audio input capability
+   * Uses the correct append() method as per Prompt API documentation
+   */
+  async transcribeAudio(audioBlob: Blob): Promise<string> {
+    console.log('🎙️ [TRANSCRIBE] Starting audio transcription...');
+    console.log('🎙️ [TRANSCRIBE] Audio blob details:', {
+      size: audioBlob.size,
+      type: audioBlob.type,
+      sizeInKB: (audioBlob.size / 1024).toFixed(2)
+    });
+
+    await this.ensureSession();
+    console.log('🎙️ [TRANSCRIBE] Session ensured');
+
+    try {
+      // Convert Blob to File object (required by Prompt API)
+      const file = new File([audioBlob], 'audio.webm', { type: audioBlob.type });
+      console.log('🎙️ [TRANSCRIBE] File object created for append()');
+
+      // Use append() to add the audio to the session context
+      console.log('🎙️ [TRANSCRIBE] Appending audio to session using correct format...');
+      await this.session.append([
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              value: 'I am providing you with an audio recording of my interview answer.'
+            },
+            {
+              type: 'audio',
+              value: file
+            }
+          ]
+        }
+      ]);
+      console.log('🎙️ [TRANSCRIBE] ✅ Audio appended to session successfully');
+
+      // Now prompt to transcribe the audio
+      const transcriptionPrompt = `Transcribe the audio recording into clear, accurate text. Only output the transcribed text with no additional commentary or explanations.`;
+
+      console.log('🎙️ [TRANSCRIBE] Sending transcription prompt...');
+      const result = await this.session.prompt(transcriptionPrompt);
+
+      console.log('🎙️ [TRANSCRIBE] ✅ Transcription successful!');
+      console.log('🎙️ [TRANSCRIBE] Result:', {
+        length: result.length,
+        preview: result.substring(0, 200)
+      });
+
+      return result;
+    } catch (error: any) {
+      console.error('🎙️ [TRANSCRIBE] ❌ Audio transcription failed:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        audioSize: audioBlob.size,
+        audioType: audioBlob.type
+      });
+      throw new Error(`Failed to transcribe audio: ${error.message}`);
+    }
+  }
+
+  /**
+   * Transcribe audio with streaming for real-time results
+   * Uses the correct append() method as per Prompt API documentation
+   */
+  async *transcribeAudioStreaming(audioBlob: Blob): AsyncGenerator<string> {
+    console.log('🎙️ [TRANSCRIBE-STREAM] Starting streaming audio transcription...');
+    console.log('🎙️ [TRANSCRIBE-STREAM] Audio blob details:', {
+      size: audioBlob.size,
+      type: audioBlob.type,
+      sizeInKB: (audioBlob.size / 1024).toFixed(2)
+    });
+
+    await this.ensureSession();
+    console.log('🎙️ [TRANSCRIBE-STREAM] Session ensured');
+
+    try {
+      // Convert Blob to File object (required by Prompt API)
+      const file = new File([audioBlob], 'audio.webm', { type: audioBlob.type });
+      console.log('🎙️ [TRANSCRIBE-STREAM] File object created for append()');
+
+      // Use append() to add the audio to the session context
+      console.log('🎙️ [TRANSCRIBE-STREAM] Appending audio to session using correct format...');
+      await this.session.append([
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              value: 'I am providing you with an audio recording of my interview answer.'
+            },
+            {
+              type: 'audio',
+              value: file
+            }
+          ]
+        }
+      ]);
+      console.log('🎙️ [TRANSCRIBE-STREAM] ✅ Audio appended to session successfully');
+
+      // Now prompt to transcribe with streaming
+      const transcriptionPrompt = `Transcribe the audio recording into clear, accurate text. Only output the transcribed text with no additional commentary or explanations.`;
+
+      console.log('🎙️ [TRANSCRIBE-STREAM] Calling promptStreaming...');
+      const stream = this.session.promptStreaming(transcriptionPrompt);
+
+      let chunkCount = 0;
+      for await (const chunk of stream) {
+        chunkCount++;
+        console.log('🎙️ [TRANSCRIBE-STREAM] Received chunk:', {
+          chunkNumber: chunkCount,
+          length: chunk.length,
+          preview: chunk.substring(0, 50)
+        });
+        yield chunk;
+      }
+
+      console.log('🎙️ [TRANSCRIBE-STREAM] ✅ Streaming transcription complete!', {
+        totalChunks: chunkCount
+      });
+    } catch (error: any) {
+      console.error('🎙️ [TRANSCRIBE-STREAM] ❌ Audio transcription streaming failed:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        audioSize: audioBlob.size,
+        audioType: audioBlob.type
+      });
+      throw new Error(`Failed to transcribe audio: ${error.message}`);
+    }
+  }
+
+  /**
+   * Extract text from image using Prompt API's image input capability
+   * Uses the correct append() method as per Prompt API documentation
+   */
+  async extractTextFromImage(imageBlob: Blob): Promise<string> {
+    console.log('🖼️ [IMAGE] Starting text extraction from image...');
+    console.log('🖼️ [IMAGE] Image blob details:', {
+      size: imageBlob.size,
+      type: imageBlob.type,
+      sizeInKB: (imageBlob.size / 1024).toFixed(2)
+    });
+
+    await this.ensureSession();
+    console.log('🖼️ [IMAGE] Session ensured');
+
+    try {
+      // Convert Blob to File object (required by Prompt API)
+      const file = new File([imageBlob], 'resume.png', { type: imageBlob.type });
+      console.log('🖼️ [IMAGE] File object created for append()');
+
+      // Use append() to add the image to the session context
+      console.log('🖼️ [IMAGE] Appending image to session using correct format...');
+      await this.session.append([
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              value: 'I am providing you with an image of a resume or CV document.'
+            },
+            {
+              type: 'image',
+              value: file
+            }
+          ]
+        }
+      ]);
+      console.log('🖼️ [IMAGE] ✅ Image appended to session successfully');
+
+      // Now prompt to extract the text
+      const extractionPrompt = `Extract all text content from the provided image. If it's a resume or CV, extract all the information including: contact details, work experience, education, skills, projects, and any other relevant information. Format the output as clean, structured text. Return only the extracted text with no additional commentary.`;
+
+      console.log('🖼️ [IMAGE] Sending extraction prompt...');
+      const result = await this.session.prompt(extractionPrompt);
+
+      console.log('🖼️ [IMAGE] ✅ Text extraction successful!');
+      console.log('🖼️ [IMAGE] Result:', {
+        length: result.length,
+        preview: result.substring(0, 200)
+      });
+
+      return result;
+    } catch (error: any) {
+      console.error('🖼️ [IMAGE] ❌ Text extraction failed:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        imageSize: imageBlob.size,
+        imageType: imageBlob.type
+      });
+      throw new Error(`Failed to extract text from image: ${error.message}`);
+    }
   }
 
   /**

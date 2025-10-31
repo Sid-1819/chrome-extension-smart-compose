@@ -29,6 +29,8 @@ function App() {
   const [questionsList, setQuestionsList] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(-1);
   const [customQuestion, setCustomQuestion] = useState("");
+  // Audio recording state
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
 
   // Check API availability on mount
   useEffect(() => {
@@ -51,15 +53,25 @@ function App() {
     }
   }, [interviewQuestions]);
 
-  // Initialize Gemini client once at startup
+  // Initialize Gemini client once at startup with multimodal support (text, audio, image)
   async function initializeClient() {
     try {
-      const client = new GeminiClient();
-      await client.initializeSession();
+      console.log('🔧 [INIT] Initializing Gemini client with multimodal support...');
+      const client = new GeminiClient({
+        expectedInputs: [
+          { type: 'text', languages: ['en'] },
+          { type: 'audio', languages: ['en'] },
+          { type: 'image', languages: ['en'] }
+        ],
+        expectedOutputs: [
+          { type: 'text', languages: ['en'] }
+        ]
+      });
+      await client.initializeSession(undefined, { enableAudioInput: true });
       setGeminiClient(client);
-      console.log('Gemini client initialized at startup');
+      console.log('🔧 [INIT] ✅ Gemini client initialized with text, audio, and image input support');
     } catch (error) {
-      console.log('Failed to initialize client at startup:', error);
+      console.error('🔧 [INIT] ❌ Failed to initialize client at startup:', error);
     }
   }
 
@@ -264,6 +276,7 @@ function App() {
   /**
    * Handle resume file selection. Supports plain text (.txt, .md) client-side.
    * For PDF/DOCX files, sends to Vercel API for parsing.
+   * For image files, uses Prompt API's image input to extract text.
    */
   async function handleResumeFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -272,18 +285,40 @@ function App() {
 
     const name = file.name.toLowerCase();
 
+    console.log('📄 [RESUME] File selected:', {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      sizeInKB: (file.size / 1024).toFixed(2)
+    });
+
     // Only read plain-text files client-side to avoid heavy dependencies
     if (file.type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.md')) {
+      console.log('📄 [RESUME] Reading as text file...');
       const reader = new FileReader();
       reader.onload = () => {
         const text = String(reader.result || '');
         setResumeText(text);
         setStatus(`✅ Loaded resume: ${file.name}`);
+        console.log('📄 [RESUME] Text file loaded:', text.length, 'characters');
       };
       reader.onerror = () => {
+        console.error('📄 [RESUME] Failed to read text file');
         setStatus('❌ Failed to read file. Please paste your resume text below.');
       };
       reader.readAsText(file);
+    }
+    // Handle image files using Prompt API
+    else if (
+      file.type.startsWith('image/') ||
+      name.endsWith('.png') ||
+      name.endsWith('.jpg') ||
+      name.endsWith('.jpeg') ||
+      name.endsWith('.gif') ||
+      name.endsWith('.webp')
+    ) {
+      console.log('📄 [RESUME] Detected image file, using Prompt API for text extraction...');
+      await handleResumeImageUpload(file);
     }
     // Handle PDF and DOCX files via API
     else if (
@@ -292,12 +327,138 @@ function App() {
       name.endsWith('.pdf') ||
       name.endsWith('.docx')
     ) {
+      console.log('📄 [RESUME] Detected PDF/DOCX file, using API for parsing...');
       await handleResumeAPIUpload(file);
     }
     else {
       // Unsupported file type
-      setStatus('⚠️ File type not supported. Please use PDF, DOCX, TXT, or MD files, or paste text below.');
+      console.warn('📄 [RESUME] Unsupported file type:', file.type);
+      setStatus('⚠️ File type not supported. Please use PDF, DOCX, TXT, MD, or image files (PNG, JPG), or paste text below.');
       setResumeText('');
+    }
+  }
+
+  /**
+   * Extract text from image resume using Prompt API's image input, with fallback to Vercel API
+   */
+  async function handleResumeImageUpload(file: File) {
+    setCoverLetterLoading(true);
+    setStatus('🖼️ Extracting text from image...');
+    setResumeText('');
+
+    console.log('📄 [RESUME-IMAGE] Starting image text extraction...');
+
+    // Try Prompt API first (on-device, private)
+    if (availability === 'available') {
+      try {
+        console.log('📄 [RESUME-IMAGE] Attempting on-device extraction with Prompt API...');
+
+        // Create blob from file
+        const imageBlob = new Blob([file], { type: file.type });
+        console.log('📄 [RESUME-IMAGE] Image blob created:', {
+          size: imageBlob.size,
+          type: imageBlob.type
+        });
+
+        // Use Gemini client to extract text from image
+        let client = geminiClient;
+        if (!client) {
+          console.log('📄 [RESUME-IMAGE] Initializing Gemini client with image support...');
+          client = new GeminiClient({
+            expectedInputs: [
+              { type: 'text', languages: ['en'] },
+              { type: 'image', languages: ['en'] },
+              { type: 'audio', languages: ['en'] }
+            ],
+            expectedOutputs: [
+              { type: 'text', languages: ['en'] }
+            ]
+          });
+          await client.initializeSession(undefined, { enableAudioInput: true });
+          setGeminiClient(client);
+          console.log('📄 [RESUME-IMAGE] Gemini client initialized with image support');
+        }
+
+        console.log('📄 [RESUME-IMAGE] Extracting text from image...');
+        const extractedText = await client.extractTextFromImage(imageBlob);
+
+        console.log('📄 [RESUME-IMAGE] Text extracted successfully:', {
+          length: extractedText.length,
+          preview: extractedText.substring(0, 100)
+        });
+
+        setResumeText(extractedText);
+        setStatus(`✅ Successfully extracted text from ${file.name} (${extractedText.length} characters) using on-device AI`);
+        setCoverLetterLoading(false);
+        return; // Success! Exit early
+
+      } catch (error: any) {
+        console.warn('📄 [RESUME-IMAGE] ⚠️ Prompt API extraction failed, falling back to cloud API...');
+        console.warn('📄 [RESUME-IMAGE] Error:', {
+          name: error.name,
+          message: error.message
+        });
+        setStatus('⚠️ On-device extraction failed, trying cloud API...');
+      }
+    } else {
+      console.log('📄 [RESUME-IMAGE] Gemini Nano not available, using cloud API...');
+      setStatus('🖼️ Using cloud API for text extraction...');
+    }
+
+    // Fallback: Use Vercel API (same as PDF/DOCX)
+    try {
+      console.log('📄 [RESUME-IMAGE] Falling back to Vercel API for image processing...');
+
+      // Create FormData to send file
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Use the same API endpoint (it should handle images too)
+      const PRODUCTION_API_URL = import.meta.env.VITE_API_URL || 'https://interview-coach-ai-9vgs.vercel.app/api/parse-resume';
+
+      console.log('📄 [RESUME-IMAGE] Sending image to API:', PRODUCTION_API_URL);
+
+      const response = await fetch(PRODUCTION_API_URL, {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(60000),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Server error' }));
+        throw new Error(error.error || 'Failed to extract text from image');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.text) {
+        setResumeText(data.text);
+        setStatus(`✅ Successfully extracted text from ${file.name} (${data.cleanedLength} characters) using cloud API`);
+        console.log('📄 [RESUME-IMAGE] ✅ Cloud API extraction successful');
+      } else {
+        throw new Error('No text extracted from image');
+      }
+
+    } catch (apiError: any) {
+      console.error('📄 [RESUME-IMAGE] ❌ Cloud API also failed:', {
+        name: apiError.name,
+        message: apiError.message
+      });
+
+      let userFriendlyMessage = '';
+
+      if (apiError.name === 'TypeError' && apiError.message.includes('Failed to fetch')) {
+        userFriendlyMessage = 'Unable to reach the text extraction API. Please check your internet connection.';
+      } else if (apiError.name === 'TimeoutError' || apiError.message.includes('timeout')) {
+        userFriendlyMessage = 'Request timed out. Please try again.';
+      } else {
+        userFriendlyMessage = apiError.message;
+      }
+
+      setStatus(`❌ ${userFriendlyMessage} Please paste your resume text in the text area below.`);
+      setResumeText('');
+    } finally {
+      setCoverLetterLoading(false);
     }
   }
 
@@ -438,109 +599,211 @@ function App() {
     }
   }
 
-  // Voice recording functionality
- async function startVoiceRecording() {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    alert('Speech recognition is not supported in your browser. Please use Chrome.');
-    return;
-  }
+  // Voice recording functionality using Prompt API audio input
+  async function startVoiceRecording() {
+    console.log('🎤 [AUDIO] Starting voice recording...');
 
-  try {
-    // Check microphone permission state first
-    const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-    
-    if (permissionStatus.state === 'prompt') {
-      // Permission not yet granted - open popup to request it
-      setStatus('🎤 Opening permission dialog...');
-      
-      const popupUrl = chrome.runtime.getURL('mic-permission.html');
-      await chrome.windows.create({
-        url: popupUrl,
-        type: 'popup',
-        width: 400,
-        height: 300,
-        focused: true
-      });
-      
-      setStatus('⏳ Please grant microphone permission in the popup window, then try recording again.');
-      return;
-    } else if (permissionStatus.state === 'denied') {
-      setStatus('❌ Microphone permission denied. Please click the microphone icon in the address bar to allow access.');
-      alert('Microphone permission denied. Please allow microphone access in your browser settings:\n\n1. Click the microphone icon in the address bar\n2. Select "Always allow"\n3. Try recording again');
-      return;
-    }
-
-    // Permission already granted - proceed with speech recognition
-    setStatus('🎤 Starting recording...');
-    
-    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    const recognition = new SpeechRecognition();
-
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsRecording(true);
-      setStatus('🎤 Recording... Speak your answer');
-    };
-
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      let finalTranscript = mockAnswer;
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + ' ';
-        } else {
-          interimTranscript += transcript;
-        }
+    try {
+      // Check if Gemini Nano is available
+      console.log('🎤 [AUDIO] Checking Gemini Nano availability:', availability);
+      if (availability !== 'available') {
+        console.warn('🎤 [AUDIO] Gemini Nano not available');
+        alert('Gemini Nano is not available. Please ensure it is enabled and downloaded.');
+        return;
       }
 
-      setMockAnswer(finalTranscript + interimTranscript);
-    };
+      // Check microphone permission state first
+      console.log('🎤 [AUDIO] Checking microphone permissions...');
+      const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      console.log('🎤 [AUDIO] Permission state:', permissionStatus.state);
 
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
+      if (permissionStatus.state === 'prompt') {
+        // Permission not yet granted - open popup to request it
+        console.log('🎤 [AUDIO] Opening permission dialog...');
+        setStatus('🎤 Opening permission dialog...');
+
+        const popupUrl = chrome.runtime.getURL('mic-permission.html');
+        await chrome.windows.create({
+          url: popupUrl,
+          type: 'popup',
+          width: 400,
+          height: 300,
+          focused: true
+        });
+
+        setStatus('⏳ Please grant microphone permission in the popup window, then try recording again.');
+        return;
+      } else if (permissionStatus.state === 'denied') {
+        console.error('🎤 [AUDIO] Microphone permission denied');
+        setStatus('❌ Microphone permission denied. Please click the microphone icon in the address bar to allow access.');
+        alert('Microphone permission denied. Please allow microphone access in your browser settings:\n\n1. Click the microphone icon in the address bar\n2. Select "Always allow"\n3. Try recording again');
+        return;
+      }
+
+      // Permission already granted - proceed with audio recording
+      console.log('🎤 [AUDIO] Permission granted, requesting microphone access...');
+      setStatus('🎤 Starting recording...');
+
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('🎤 [AUDIO] Microphone stream obtained:', stream.getTracks().map(t => ({
+        kind: t.kind,
+        label: t.label,
+        enabled: t.enabled,
+        muted: t.muted
+      })));
+
+      // Check supported MIME types
+      const supportedTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4',
+        'audio/wav'
+      ];
+      const availableTypes = supportedTypes.filter(type => MediaRecorder.isTypeSupported(type));
+      console.log('🎤 [AUDIO] Supported MIME types:', availableTypes);
+
+      // Create MediaRecorder to capture audio
+      const mimeType = availableTypes[0] || 'audio/webm';
+      console.log('🎤 [AUDIO] Using MIME type:', mimeType);
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      console.log('🎤 [AUDIO] MediaRecorder created:', {
+        mimeType: recorder.mimeType,
+        state: recorder.state,
+        audioBitsPerSecond: recorder.audioBitsPerSecond
+      });
+
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (event) => {
+        console.log('🎤 [AUDIO] Data available:', {
+          size: event.data.size,
+          type: event.data.type,
+          chunkCount: chunks.length + 1
+        });
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onstart = () => {
+        console.log('🎤 [AUDIO] Recording started');
+        setIsRecording(true);
+        setStatus('🎤 Recording... Speak your answer');
+      };
+
+      recorder.onstop = async () => {
+        console.log('🎤 [AUDIO] Recording stopped, processing audio...');
+        setIsRecording(false);
+        setStatus('⏳ Transcribing audio...');
+
+        // Combine all chunks into a single Blob
+        const audioBlob = new Blob(chunks, { type: mimeType });
+        console.log('🎤 [AUDIO] Audio blob created:', {
+          size: audioBlob.size,
+          type: audioBlob.type,
+          chunkCount: chunks.length,
+          sizeInKB: (audioBlob.size / 1024).toFixed(2)
+        });
+
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => {
+          console.log('🎤 [AUDIO] Stopping track:', track.kind, track.label);
+          track.stop();
+        });
+
+        try {
+          console.log('🎤 [AUDIO] Initializing Gemini client for transcription...');
+          // Use Gemini client to transcribe audio
+          let client = geminiClient;
+          if (!client) {
+            console.log('🎤 [AUDIO] Creating new Gemini client with audio support...');
+            client = new GeminiClient({
+              expectedInputs: [
+                { type: 'text', languages: ['en'] },
+                { type: 'audio', languages: ['en'] }
+              ],
+              expectedOutputs: [
+                { type: 'text', languages: ['en'] }
+              ]
+            });
+            await client.initializeSession(undefined, { enableAudioInput: true });
+            setGeminiClient(client);
+            console.log('🎤 [AUDIO] Gemini client initialized with audio support');
+          }
+
+          console.log('🎤 [AUDIO] Sending audio to Prompt API for transcription...');
+          const transcription = await client.transcribeAudio(audioBlob);
+          console.log('🎤 [AUDIO] Transcription received:', {
+            length: transcription.length,
+            preview: transcription.substring(0, 100)
+          });
+
+          // Append transcription to existing answer
+          setMockAnswer(prev => prev ? `${prev} ${transcription}` : transcription);
+          setStatus('✅ Audio transcribed successfully!');
+          console.log('🎤 [AUDIO] Transcription complete!');
+        } catch (error: any) {
+          console.error('🎤 [AUDIO] ❌ Transcription error:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          });
+          setStatus('❌ Failed to transcribe audio. Please try again.');
+          alert(`Transcription failed: ${error.message}\n\nPlease try again or type your answer instead.`);
+        }
+      };
+
+      recorder.onerror = (event: any) => {
+        console.error('🎤 [AUDIO] ❌ MediaRecorder error:', event.error);
+        setIsRecording(false);
+        setStatus('❌ Recording error occurred');
+        alert(`Recording error: ${event.error}`);
+
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      // Store the recorder
+      setMediaRecorder(recorder);
+
+      // Start recording
+      console.log('🎤 [AUDIO] Starting MediaRecorder...');
+      recorder.start();
+
+    } catch (error: any) {
+      console.error('🎤 [AUDIO] ❌ Error starting voice recording:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
       setIsRecording(false);
 
-      let errorMessage = '❌ Speech recognition error';
-      if (event.error === 'not-allowed') {
+      let errorMessage = `❌ Error: ${error.message}`;
+      if (error.name === 'NotAllowedError') {
         errorMessage = '❌ Microphone permission denied. Please allow microphone access in your browser settings.';
-      } else if (event.error === 'no-speech') {
-        errorMessage = '⚠️ No speech detected. Please try again.';
-      } else if (event.error === 'network') {
-        errorMessage = '❌ Network error. Please check your connection.';
-      } else {
-        errorMessage = `❌ Speech recognition error: ${event.error}`;
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = '❌ No microphone found. Please connect a microphone and try again.';
       }
 
       setStatus(errorMessage);
       alert(errorMessage);
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-      setStatus('✅ Recording stopped');
-    };
-
-    (window as any).currentRecognition = recognition;
-    recognition.start();
-
-  } catch (error: any) {
-    console.error('Error checking microphone permission:', error);
-    setIsRecording(false);
-    setStatus(`❌ Error: ${error.message}`);
-    alert(`Error: ${error.message}`);
+    }
   }
-}
 
   function stopVoiceRecording() {
-    const recognition = (window as any).currentRecognition;
-    if (recognition) {
-      recognition.stop();
-      setIsRecording(false);
+    console.log('🎤 [AUDIO] Stop recording requested');
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      console.log('🎤 [AUDIO] Stopping MediaRecorder...', {
+        state: mediaRecorder.state,
+        mimeType: mediaRecorder.mimeType
+      });
+      mediaRecorder.stop();
+      setStatus('⏳ Processing recording...');
+    } else {
+      console.warn('🎤 [AUDIO] Cannot stop - MediaRecorder is inactive or null');
     }
   }
 
@@ -747,12 +1010,12 @@ function App() {
                     </label>
                     <input
                       type="file"
-                      accept=".txt,.md,.pdf,.docx,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.gif,.webp,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
                       onChange={handleResumeFileChange}
                       className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700"
                     />
                     <p className="mt-1 text-xs text-gray-500">
-                      📄 Supports: TXT, MD (instant), PDF, DOCX (cloud parsing)
+                      📄 Supports: TXT, MD (instant), Images (AI extraction), PDF, DOCX (cloud parsing)
                     </p>
                     {resumeFilename && (
                       <p className="mt-2 text-sm text-green-600 flex items-center gap-2">
@@ -832,7 +1095,7 @@ function App() {
                 {/* Microphone Permission Info */}
                 <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <p className="text-sm text-blue-800">
-                    🎤 <strong>Voice Input:</strong> Click "Start Voice Recording" to allow microphone access. You'll be prompted for permission on first use.
+                    🎤 <strong>Voice Input:</strong> Using Gemini Nano's built-in audio transcription. Click "Start Voice Recording" to begin. You'll be prompted for microphone permission on first use.
                   </p>
                 </div>
 
