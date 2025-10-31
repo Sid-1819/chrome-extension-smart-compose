@@ -398,7 +398,7 @@ function App() {
         method: 'POST',
         body: formData,
         // Add timeout to detect if API is not available
-        signal: AbortSignal.timeout(10000), // 10 second timeout
+        signal: AbortSignal.timeout(60000), // 10 second timeout
       });
 
       if (!response.ok) {
