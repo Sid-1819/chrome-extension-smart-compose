@@ -7,7 +7,7 @@ function App() {
   const [status, setStatus] = useState("Checking API availability...");
   const [availability, setAvailability] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'interview-prep' | 'mock-interview'>('interview-prep');
+  const [activeTab, setActiveTab] = useState<'jd-coverletter' | 'interview-practice'>('jd-coverletter');
   const [geminiClient, setGeminiClient] = useState<GeminiClient | null>(null);
 
   // Interview Prep states
@@ -142,12 +142,12 @@ function App() {
         if (Date.now() - timestamp < 5000) {
           if (action === 'analyze-job-description') {
             setJobDescription(text);
-            setActiveTab('interview-prep');
+            setActiveTab('jd-coverletter');
             // Auto-analyze immediately with the text
             handleAnalyzeJobDescription(text);
           } else if (action === 'generate-questions') {
             setJobDescription(text);
-            setActiveTab('interview-prep');
+            setActiveTab('interview-practice');
             // Auto-generate immediately with the text
             handleGenerateQuestions(text);
           }
@@ -541,8 +541,8 @@ function App() {
    * if available on the device.
    */
   async function handleCreateCoverLetter() {
-    if (!jdAnalysisResult.trim()) {
-      alert('Please analyze the job description first.');
+    if (!jobDescription.trim()) {
+      alert('Please paste a job description first.');
       return;
     }
     if (!resumeText.trim()) {
@@ -552,7 +552,6 @@ function App() {
 
     setCoverLetterLoading(true);
     setCoverLetterResult('');
-    setStatus('✉️ Generating cover letter...');
 
     try {
       let client = geminiClient;
@@ -562,9 +561,19 @@ function App() {
         setGeminiClient(client);
       }
 
+      // Auto-analyze JD if not already done
+      let analysis = jdAnalysisResult;
+      if (!analysis.trim()) {
+        setStatus('🔍 Analyzing job description first...');
+        analysis = await client.analyzeJobDescription(jobDescription);
+        setJdAnalysisResult(analysis);
+      }
+
+      setStatus('✉️ Generating cover letter...');
+
   const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). IMPORTANT: Keep the cover letter under 250 words.`;
 
-  const userPrompt = `---\nJob Description Analysis:\n${jdAnalysisResult}\n\n---\nApplicant Resume:\n${resumeText}\n\n---\nWrite a cover letter for this candidate applying to the job described above. Reference both the job requirements and the candidate's relevant experience. Make the letter unique to this application.`;
+  const userPrompt = `---\nJob Description Analysis:\n${analysis}\n\n---\nApplicant Resume:\n${resumeText}\n\n---\nWrite a cover letter for this candidate applying to the job described above. Reference both the job requirements and the candidate's relevant experience. Make the letter unique to this application.`;
 
       const generated = await client.generateContent(userPrompt, systemPrompt);
 
@@ -842,8 +851,8 @@ function App() {
   }
 
   const tabs = [
-    { id: 'interview-prep', label: 'Interview Prep', icon: '📋' },
-    { id: 'mock-interview', label: 'Mock Interview', icon: '🎙️' }
+    { id: 'jd-coverletter', label: 'Job Analysis & Cover Letter', icon: '📋' },
+    { id: 'interview-practice', label: 'Interview Practice', icon: '🎙️' }
   ] as const;
 
   // Check if running in iframe (sidebar mode)
@@ -927,11 +936,11 @@ function App() {
 
           {/* Tab Content */}
           <div className="space-y-4">
-            {/* Interview Prep Tab */}
-            {activeTab === 'interview-prep' && (
+            {/* Job Analysis & Cover Letter Tab */}
+            {activeTab === 'jd-coverletter' && (
               <div>
                 <p className="text-gray-600 mb-4">
-                  Paste a job description to get AI-powered analysis and personalized interview questions.
+                  Paste a job description to get AI-powered analysis and create a tailored cover letter.
                 </p>
 
                 {/* Job Description Input */}
@@ -951,25 +960,18 @@ function App() {
                   </p>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="grid grid-cols-2 gap-3 mb-6">
+                {/* Action Button */}
+                <div className="mb-6">
                   <button
                     onClick={() => handleAnalyzeJobDescription()}
                     disabled={loading || availability !== 'available'}
-                    className="bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {loading && !interviewQuestions ? '⏳ Analyzing...' : '🔍 Analyze JD'}
-                  </button>
-                  <button
-                    onClick={() => handleGenerateQuestions()}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {loading && interviewQuestions !== jdAnalysisResult ? '⏳ Generating...' : '💭 Generate Questions'}
+                    {loading ? '⏳ Analyzing...' : '🔍 Analyze Job Description'}
                   </button>
                 </div>
 
-                {/* Results */}
+                {/* Analysis Result */}
                 {jdAnalysisResult && (
                   <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
@@ -978,23 +980,6 @@ function App() {
                     <div className="text-gray-700 prose prose-sm max-w-none">
                       <ReactMarkdown>{jdAnalysisResult}</ReactMarkdown>
                     </div>
-                  </div>
-                )}
-
-                {interviewQuestions && (
-                  <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
-                      💭 Likely Interview Questions
-                    </h3>
-                    <div className="text-gray-700 prose prose-sm max-w-none">
-                      <ReactMarkdown>{interviewQuestions}</ReactMarkdown>
-                    </div>
-                    <button
-                      onClick={() => setActiveTab('mock-interview')}
-                      className="mt-4 w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      🎤 Start Mock Interview with These Questions
-                    </button>
                   </div>
                 )}
 
@@ -1037,7 +1022,7 @@ function App() {
                   <div className="mt-4 flex gap-3">
                     <button
                       onClick={handleCreateCoverLetter}
-                      disabled={coverLetterLoading || availability !== 'available' || !jdAnalysisResult || !resumeText}
+                      disabled={coverLetterLoading || availability !== 'available' || !jobDescription.trim() || !resumeText.trim()}
                       className="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {coverLetterLoading ? '⏳ Creating cover letter...' : '✉️ Create Cover Letter'}
@@ -1085,11 +1070,61 @@ function App() {
               </div>
             )}
 
-            {/* Mock Interview Tab */}
-            {activeTab === 'mock-interview' && (
+            {/* Interview Practice Tab */}
+            {activeTab === 'interview-practice' && (
               <div>
+                <p className="text-gray-600 mb-6">
+                  Generate interview questions from a job description, then practice answering them with AI-powered feedback.
+                </p>
+
+                {/* Job Description Input for Questions */}
+                <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
+                    📝 Generate Interview Questions
+                  </h3>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Job Description:
+                  </label>
+                  <textarea
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    placeholder="Paste the job description here to generate relevant interview questions..."
+                    className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    disabled={availability !== 'available'}
+                  />
+                  <p className="text-sm text-gray-500 mt-1 mb-3">
+                    {jobDescription.length} characters
+                  </p>
+                  <button
+                    onClick={() => handleGenerateQuestions()}
+                    disabled={loading || availability !== 'available'}
+                    className="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loading && interviewQuestions !== jdAnalysisResult ? '⏳ Generating Questions...' : '💭 Generate Interview Questions'}
+                  </button>
+                </div>
+
+                {/* Generated Questions Display */}
+                {interviewQuestions && (
+                  <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                      💭 Generated Interview Questions
+                    </h3>
+                    <div className="text-gray-700 prose prose-sm max-w-none">
+                      <ReactMarkdown>{interviewQuestions}</ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+
+                {/* Divider */}
+                <div className="my-8 border-t-2 border-gray-300"></div>
+
+                {/* Mock Interview Section */}
+                <h3 className="font-semibold text-gray-900 mb-4 text-xl flex items-center gap-2">
+                  🎤 Mock Interview Practice
+                </h3>
                 <p className="text-gray-600 mb-4">
-                  Practice interview questions and get AI-powered feedback with ratings. Answer using voice or text.
+                  Practice answering interview questions and get AI-powered feedback. Answer using voice or text.
                 </p>
 
                 {/* Microphone Permission Info */}
@@ -1269,7 +1304,7 @@ function App() {
             &copy; 2025 InterviewCoach.AI. All rights reserved.
           </p>
           <p>
-            Built with ❤️ by Siddhesh Shirdhankar. Check out the <a href="https://github.com/Sid-1819/interview-coach-ai" target="_blank" className="text-purple-600 hover:underline">GitHub repo</a> for more info.
+            Built with ❤️ by <a href="https://www.linkedin.com/in/siddhesh-shirdhankar-8024871a7/">Siddhesh Shirdhankar</a>. Check out the <a href="https://github.com/Sid-1819/interview-coach-ai" target="_blank" className="text-purple-600 hover:underline">GitHub repo</a> for more info.
           </p>
         </div>
       </div>
