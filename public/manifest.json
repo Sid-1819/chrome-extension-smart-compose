@@ -3,7 +3,7 @@
   "name": "InterviewCoach.AI",
   "version": "1.0.0",
   "description": "AI-powered interview preparation assistant with job description analysis and question generation",
-  "permissions": ["storage", "activeTab", "scripting", "notifications", "contextMenus", "sidePanel"],
+  "permissions": ["storage", "activeTab", "scripting", "notifications", "contextMenus", "sidePanel", "audio"],
   "host_permissions": [
     "https://*/*",
     "http://*/*"
@@ -36,8 +36,8 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["index.html", "assets/*"],
-      "matches": ["https://*/*", "http://*/*"]
+      "resources": ["index.html", "assets/*","mic-permission.html"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

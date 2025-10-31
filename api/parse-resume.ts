@@ -66,7 +66,53 @@ async function extractTextFromFile(filePath: string, mimeType: string): Promise<
       return fs.readFileSync(filePath, 'utf-8');
     }
 
-    throw new Error('Unsupported file type. Please upload PDF, DOCX, or TXT files.');
+    // Handle image files using Gemini's vision capability
+    if (
+      mimeType.startsWith('image/') ||
+      filePath.endsWith('.png') ||
+      filePath.endsWith('.jpg') ||
+      filePath.endsWith('.jpeg') ||
+      filePath.endsWith('.gif') ||
+      filePath.endsWith('.webp')
+    ) {
+      console.log('Using Gemini to extract text from image...');
+
+      // Read image file as base64
+      const fileBuffer = fs.readFileSync(filePath);
+      const base64Data = fileBuffer.toString('base64');
+
+      // Determine actual MIME type based on file extension if generic
+      let imageMimeType = mimeType;
+      if (!mimeType.startsWith('image/')) {
+        if (filePath.endsWith('.png')) imageMimeType = 'image/png';
+        else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) imageMimeType = 'image/jpeg';
+        else if (filePath.endsWith('.gif')) imageMimeType = 'image/gif';
+        else if (filePath.endsWith('.webp')) imageMimeType = 'image/webp';
+      }
+
+      const contents = [
+        {
+          text: 'Extract all text content from this resume/CV image. If it\'s a resume or CV, extract all the information including: contact details, work experience, education, skills, projects, and any other relevant information. Format the output as clean, structured text. Return only the extracted text content without any additional commentary.',
+        },
+        {
+          inlineData: {
+            mimeType: imageMimeType,
+            data: base64Data,
+          },
+        },
+      ];
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: contents,
+      });
+
+      const text = response.text || '';
+      console.log('Image text extracted successfully using Gemini');
+      return text;
+    }
+
+    throw new Error('Unsupported file type. Please upload PDF, DOCX, TXT, or image files (PNG, JPG, GIF, WebP).');
   } catch (error) {
     throw new Error(`Failed to extract text: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }

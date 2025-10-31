@@ -1,15 +1,13 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import { GeminiClient } from "./utils/geminiClient";
+import ReactMarkdown from "react-markdown";
 
 function App() {
   const [status, setStatus] = useState("Checking API availability...");
   const [availability, setAvailability] = useState<string>("");
-  const [inputText, setInputText] = useState("");
-  const [_, setFeedbackResult] = useState("");
-  const [improveResult, setImproveResult] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'interview-prep' | 'feedback' | 'improve' | 'mock-interview'>('interview-prep');
+  const [activeTab, setActiveTab] = useState<'interview-prep' | 'mock-interview'>('interview-prep');
   const [geminiClient, setGeminiClient] = useState<GeminiClient | null>(null);
 
   // Interview Prep states
@@ -21,6 +19,7 @@ function App() {
   const [resumeFilename, setResumeFilename] = useState<string | null>(null);
   const [coverLetterResult, setCoverLetterResult] = useState("");
   const [coverLetterLoading, setCoverLetterLoading] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   // Mock Interview states
   const [mockQuestion, setMockQuestion] = useState("");
   const [mockAnswer, setMockAnswer] = useState("");
@@ -30,6 +29,8 @@ function App() {
   const [questionsList, setQuestionsList] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(-1);
   const [customQuestion, setCustomQuestion] = useState("");
+  // Audio recording state
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
 
   // Check API availability on mount
   useEffect(() => {
@@ -52,15 +53,25 @@ function App() {
     }
   }, [interviewQuestions]);
 
-  // Initialize Gemini client once at startup
+  // Initialize Gemini client once at startup with multimodal support (text, audio, image)
   async function initializeClient() {
     try {
-      const client = new GeminiClient();
-      await client.initializeSession();
+      console.log('🔧 [INIT] Initializing Gemini client with multimodal support...');
+      const client = new GeminiClient({
+        expectedInputs: [
+          { type: 'text', languages: ['en'] },
+          { type: 'audio', languages: ['en'] },
+          { type: 'image', languages: ['en'] }
+        ],
+        expectedOutputs: [
+          { type: 'text', languages: ['en'] }
+        ]
+      });
+      await client.initializeSession(undefined, { enableAudioInput: true });
       setGeminiClient(client);
-      console.log('Gemini client initialized at startup');
+      console.log('🔧 [INIT] ✅ Gemini client initialized with text, audio, and image input support');
     } catch (error) {
-      console.log('Failed to initialize client at startup:', error);
+      console.error('🔧 [INIT] ❌ Failed to initialize client at startup:', error);
     }
   }
 
@@ -71,7 +82,7 @@ function App() {
     const questions: string[] = [];
 
     for (const line of lines) {
-      // Remove numbering like "1.", "2.", etc.
+      // Remove numbering like "1.", "2.", etc."
       const cleaned = line.replace(/^\d+\.\s*/, '').trim();
       // Only add non-empty lines that look like questions or statements
       if (cleaned.length > 10) {
@@ -139,14 +150,6 @@ function App() {
             setActiveTab('interview-prep');
             // Auto-generate immediately with the text
             handleGenerateQuestions(text);
-          } else if (action === 'get-feedback') {
-            setInputText(text);
-            setActiveTab('feedback');
-            // Auto-get feedback immediately with the text
-            handleGetFeedback(text);
-          } else if (action === 'improve-text') {
-            setInputText(text);
-            setActiveTab('improve');
           }
 
           // Clear the action after processing
@@ -167,24 +170,24 @@ function App() {
     try {
       // Check Prompt API
       if (!('LanguageModel' in window)) {
-        setStatus("❌ Prompt API not supported. Please use Chrome 127+ and enable flags.");
+        setStatus(" Prompt API not supported. Please use Chrome 127+ and enable flags.");
         setAvailability("unavailable");
       } else {
         const availabilityStatus = await (window as any).LanguageModel.availability();
         setAvailability(availabilityStatus);
 
         if (availabilityStatus === 'available') {
-          setStatus("✅ Gemini Nano is ready!");
+          setStatus(" Gemini Nano is ready!");
         } else if (availabilityStatus === 'downloading') {
-          setStatus("⏳ Gemini Nano is downloading... Please wait.");
+          setStatus(" Gemini Nano is downloading... Please wait.");
           pollForAvailability();
         } else {
-          setStatus("❌ Gemini Nano not available. Check setup instructions below.");
+          setStatus(" Gemini Nano not available. Check setup instructions below.");
         }
       }
     } catch (error) {
       console.error('Error checking availability:', error);
-      setStatus("❌ Error checking API. Make sure flags are enabled.");
+      setStatus(" Error checking API. Make sure flags are enabled.");
       setAvailability("unavailable");
     }
   }
@@ -196,10 +199,10 @@ function App() {
         setAvailability(availabilityStatus);
 
         if (availabilityStatus === 'available') {
-          setStatus("✅ Gemini Nano download complete! Ready to use.");
+          setStatus(" Gemini Nano download complete! Ready to use.");
           clearInterval(interval);
         } else if (availabilityStatus === 'unavailable') {
-          setStatus("❌ Download failed. Please check your setup.");
+          setStatus(" Download failed. Please check your setup.");
           clearInterval(interval);
         }
       } catch (error) {
@@ -207,69 +210,6 @@ function App() {
       }
     }, 5000); // Check every 5 seconds
   }
-
-  async function handleGetFeedback(textOverride?: string) {
-    const text = textOverride || inputText;
-    if (!text.trim()) {
-      alert('Please enter some text first!');
-      return;
-    }
-
-    setLoading(true);
-    setFeedbackResult('');
-    setStatus('🤔 Getting AI feedback...');
-
-    try {
-      // Use existing client or initialize
-      let client = geminiClient;
-      if (!client) {
-        client = new GeminiClient();
-        await client.initializeSession();
-        setGeminiClient(client);
-      }
-
-      const feedback = await client.getInterviewFeedback(text);
-      setFeedbackResult(feedback);
-      setStatus('✅ Feedback received!');
-    } catch (error) {
-      setFeedbackResult(`Error: ${error}`);
-      setStatus('❌ Failed to get feedback.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleImproveText(style: 'professional' | 'casual' | 'concise', textOverride?: string) {
-    const text = textOverride || inputText;
-    if (!text.trim()) {
-      alert('Please enter some text first!');
-      return;
-    }
-
-    setLoading(true);
-    setImproveResult('');
-    setStatus(`✍️ Improving text (${style} style)...`);
-
-    try {
-      // Use existing client or initialize
-      let client = geminiClient;
-      if (!client) {
-        client = new GeminiClient();
-        await client.initializeSession();
-        setGeminiClient(client);
-      }
-
-      const improved = await client.improveText(text, style);
-      setImproveResult(improved);
-      setStatus('✅ Text improved!');
-    } catch (error) {
-      setImproveResult(`Error: ${error}`);
-      setStatus('❌ Failed to improve text.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
 
   async function handleAnalyzeJobDescription(textOverride?: string) {
     const text = textOverride || jobDescription;
@@ -336,6 +276,7 @@ function App() {
   /**
    * Handle resume file selection. Supports plain text (.txt, .md) client-side.
    * For PDF/DOCX files, sends to Vercel API for parsing.
+   * For image files, uses Prompt API's image input to extract text.
    */
   async function handleResumeFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -344,18 +285,40 @@ function App() {
 
     const name = file.name.toLowerCase();
 
+    console.log('📄 [RESUME] File selected:', {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      sizeInKB: (file.size / 1024).toFixed(2)
+    });
+
     // Only read plain-text files client-side to avoid heavy dependencies
     if (file.type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.md')) {
+      console.log('📄 [RESUME] Reading as text file...');
       const reader = new FileReader();
       reader.onload = () => {
         const text = String(reader.result || '');
         setResumeText(text);
         setStatus(`✅ Loaded resume: ${file.name}`);
+        console.log('📄 [RESUME] Text file loaded:', text.length, 'characters');
       };
       reader.onerror = () => {
+        console.error('📄 [RESUME] Failed to read text file');
         setStatus('❌ Failed to read file. Please paste your resume text below.');
       };
       reader.readAsText(file);
+    }
+    // Handle image files using Prompt API
+    else if (
+      file.type.startsWith('image/') ||
+      name.endsWith('.png') ||
+      name.endsWith('.jpg') ||
+      name.endsWith('.jpeg') ||
+      name.endsWith('.gif') ||
+      name.endsWith('.webp')
+    ) {
+      console.log('📄 [RESUME] Detected image file, using Prompt API for text extraction...');
+      await handleResumeImageUpload(file);
     }
     // Handle PDF and DOCX files via API
     else if (
@@ -364,12 +327,138 @@ function App() {
       name.endsWith('.pdf') ||
       name.endsWith('.docx')
     ) {
+      console.log('📄 [RESUME] Detected PDF/DOCX file, using API for parsing...');
       await handleResumeAPIUpload(file);
     }
     else {
       // Unsupported file type
-      setStatus('⚠️ File type not supported. Please use PDF, DOCX, TXT, or MD files, or paste text below.');
+      console.warn('📄 [RESUME] Unsupported file type:', file.type);
+      setStatus('⚠️ File type not supported. Please use PDF, DOCX, TXT, MD, or image files (PNG, JPG), or paste text below.');
       setResumeText('');
+    }
+  }
+
+  /**
+   * Extract text from image resume using Prompt API's image input, with fallback to Vercel API
+   */
+  async function handleResumeImageUpload(file: File) {
+    setCoverLetterLoading(true);
+    setStatus('🖼️ Extracting text from image...');
+    setResumeText('');
+
+    console.log('📄 [RESUME-IMAGE] Starting image text extraction...');
+
+    // Try Prompt API first (on-device, private)
+    if (availability === 'available') {
+      try {
+        console.log('📄 [RESUME-IMAGE] Attempting on-device extraction with Prompt API...');
+
+        // Create blob from file
+        const imageBlob = new Blob([file], { type: file.type });
+        console.log('📄 [RESUME-IMAGE] Image blob created:', {
+          size: imageBlob.size,
+          type: imageBlob.type
+        });
+
+        // Use Gemini client to extract text from image
+        let client = geminiClient;
+        if (!client) {
+          console.log('📄 [RESUME-IMAGE] Initializing Gemini client with image support...');
+          client = new GeminiClient({
+            expectedInputs: [
+              { type: 'text', languages: ['en'] },
+              { type: 'image', languages: ['en'] },
+              { type: 'audio', languages: ['en'] }
+            ],
+            expectedOutputs: [
+              { type: 'text', languages: ['en'] }
+            ]
+          });
+          await client.initializeSession(undefined, { enableAudioInput: true });
+          setGeminiClient(client);
+          console.log('📄 [RESUME-IMAGE] Gemini client initialized with image support');
+        }
+
+        console.log('📄 [RESUME-IMAGE] Extracting text from image...');
+        const extractedText = await client.extractTextFromImage(imageBlob);
+
+        console.log('📄 [RESUME-IMAGE] Text extracted successfully:', {
+          length: extractedText.length,
+          preview: extractedText.substring(0, 100)
+        });
+
+        setResumeText(extractedText);
+        setStatus(`✅ Successfully extracted text from ${file.name} (${extractedText.length} characters) using on-device AI`);
+        setCoverLetterLoading(false);
+        return; // Success! Exit early
+
+      } catch (error: any) {
+        console.warn('📄 [RESUME-IMAGE] ⚠️ Prompt API extraction failed, falling back to cloud API...');
+        console.warn('📄 [RESUME-IMAGE] Error:', {
+          name: error.name,
+          message: error.message
+        });
+        setStatus('⚠️ On-device extraction failed, trying cloud API...');
+      }
+    } else {
+      console.log('📄 [RESUME-IMAGE] Gemini Nano not available, using cloud API...');
+      setStatus('🖼️ Using cloud API for text extraction...');
+    }
+
+    // Fallback: Use Vercel API (same as PDF/DOCX)
+    try {
+      console.log('📄 [RESUME-IMAGE] Falling back to Vercel API for image processing...');
+
+      // Create FormData to send file
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Use the same API endpoint (it should handle images too)
+      const PRODUCTION_API_URL = import.meta.env.VITE_API_URL || 'https://interview-coach-ai-9vgs.vercel.app/api/parse-resume';
+
+      console.log('📄 [RESUME-IMAGE] Sending image to API:', PRODUCTION_API_URL);
+
+      const response = await fetch(PRODUCTION_API_URL, {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(60000),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Server error' }));
+        throw new Error(error.error || 'Failed to extract text from image');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.text) {
+        setResumeText(data.text);
+        setStatus(`✅ Successfully extracted text from ${file.name} (${data.cleanedLength} characters) using cloud API`);
+        console.log('📄 [RESUME-IMAGE] ✅ Cloud API extraction successful');
+      } else {
+        throw new Error('No text extracted from image');
+      }
+
+    } catch (apiError: any) {
+      console.error('📄 [RESUME-IMAGE] ❌ Cloud API also failed:', {
+        name: apiError.name,
+        message: apiError.message
+      });
+
+      let userFriendlyMessage = '';
+
+      if (apiError.name === 'TypeError' && apiError.message.includes('Failed to fetch')) {
+        userFriendlyMessage = 'Unable to reach the text extraction API. Please check your internet connection.';
+      } else if (apiError.name === 'TimeoutError' || apiError.message.includes('timeout')) {
+        userFriendlyMessage = 'Request timed out. Please try again.';
+      } else {
+        userFriendlyMessage = apiError.message;
+      }
+
+      setStatus(`❌ ${userFriendlyMessage} Please paste your resume text in the text area below.`);
+      setResumeText('');
+    } finally {
+      setCoverLetterLoading(false);
     }
   }
 
@@ -397,8 +486,7 @@ function App() {
       const response = await fetch(apiUrl, {
         method: 'POST',
         body: formData,
-        // Add timeout to detect if API is not available
-        signal: AbortSignal.timeout(60000), // 10 second timeout
+        signal: AbortSignal.timeout(60000), 
       });
 
       if (!response.ok) {
@@ -474,7 +562,7 @@ function App() {
         setGeminiClient(client);
       }
 
-  const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). Make sure you wrap up the cover letter in 250 to 300 words.`;
+  const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). IMPORTANT: Keep the cover letter under 250 words.`;
 
   const userPrompt = `---\nJob Description Analysis:\n${jdAnalysisResult}\n\n---\nApplicant Resume:\n${resumeText}\n\n---\nWrite a cover letter for this candidate applying to the job described above. Reference both the job requirements and the candidate's relevant experience. Make the letter unique to this application.`;
 
@@ -492,89 +580,212 @@ function App() {
     }
   }
 
-  // Voice recording functionality
-  async function startVoiceRecording() {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Speech recognition is not supported in your browser. Please use Chrome.');
-      return;
+  /**
+   * Copy cover letter to clipboard
+   */
+  async function handleCopyCoverLetter() {
+    try {
+      await navigator.clipboard.writeText(coverLetterResult);
+      setCopySuccess(true);
+      setStatus('✅ Cover letter copied to clipboard!');
+
+      // Reset copy success after 2 seconds
+      setTimeout(() => {
+        setCopySuccess(false);
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      setStatus('❌ Failed to copy to clipboard');
     }
+  }
+
+  // Voice recording functionality using Prompt API audio input
+  async function startVoiceRecording() {
+    console.log('🎤 [AUDIO] Starting voice recording...');
 
     try {
-      // Request microphone permission first
-      setStatus('🎤 Requesting microphone permission...');
+      // Check if Gemini Nano is available
+      console.log('🎤 [AUDIO] Checking Gemini Nano availability:', availability);
+      if (availability !== 'available') {
+        console.warn('🎤 [AUDIO] Gemini Nano not available');
+        alert('Gemini Nano is not available. Please ensure it is enabled and downloaded.');
+        return;
+      }
+
+      // Check microphone permission state first
+      console.log('🎤 [AUDIO] Checking microphone permissions...');
+      const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      console.log('🎤 [AUDIO] Permission state:', permissionStatus.state);
+
+      if (permissionStatus.state === 'prompt') {
+        // Permission not yet granted - open popup to request it
+        console.log('🎤 [AUDIO] Opening permission dialog...');
+        setStatus('🎤 Opening permission dialog...');
+
+        const popupUrl = chrome.runtime.getURL('mic-permission.html');
+        await chrome.windows.create({
+          url: popupUrl,
+          type: 'popup',
+          width: 400,
+          height: 300,
+          focused: true
+        });
+
+        setStatus('⏳ Please grant microphone permission in the popup window, then try recording again.');
+        return;
+      } else if (permissionStatus.state === 'denied') {
+        console.error('🎤 [AUDIO] Microphone permission denied');
+        setStatus('❌ Microphone permission denied. Please click the microphone icon in the address bar to allow access.');
+        alert('Microphone permission denied. Please allow microphone access in your browser settings:\n\n1. Click the microphone icon in the address bar\n2. Select "Always allow"\n3. Try recording again');
+        return;
+      }
+
+      // Permission already granted - proceed with audio recording
+      console.log('🎤 [AUDIO] Permission granted, requesting microphone access...');
+      setStatus('🎤 Starting recording...');
+
+      // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('🎤 [AUDIO] Microphone stream obtained:', stream.getTracks().map(t => ({
+        kind: t.kind,
+        label: t.label,
+        enabled: t.enabled,
+        muted: t.muted
+      })));
 
-      // Stop the stream immediately - we just needed permission
-      stream.getTracks().forEach(track => track.stop());
+      // Check supported MIME types
+      const supportedTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4',
+        'audio/wav'
+      ];
+      const availableTypes = supportedTypes.filter(type => MediaRecorder.isTypeSupported(type));
+      console.log('🎤 [AUDIO] Supported MIME types:', availableTypes);
 
-      // Now start speech recognition
-      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-      const recognition = new SpeechRecognition();
+      // Create MediaRecorder to capture audio
+      const mimeType = availableTypes[0] || 'audio/webm';
+      console.log('🎤 [AUDIO] Using MIME type:', mimeType);
 
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      console.log('🎤 [AUDIO] MediaRecorder created:', {
+        mimeType: recorder.mimeType,
+        state: recorder.state,
+        audioBitsPerSecond: recorder.audioBitsPerSecond
+      });
 
-      recognition.onstart = () => {
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (event) => {
+        console.log('🎤 [AUDIO] Data available:', {
+          size: event.data.size,
+          type: event.data.type,
+          chunkCount: chunks.length + 1
+        });
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onstart = () => {
+        console.log('🎤 [AUDIO] Recording started');
         setIsRecording(true);
         setStatus('🎤 Recording... Speak your answer');
       };
 
-      recognition.onresult = (event: any) => {
-        let interimTranscript = '';
-        let finalTranscript = mockAnswer;
+      recorder.onstop = async () => {
+        console.log('🎤 [AUDIO] Recording stopped, processing audio...');
+        setIsRecording(false);
+        setStatus('⏳ Transcribing audio...');
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
+        // Combine all chunks into a single Blob
+        const audioBlob = new Blob(chunks, { type: mimeType });
+        console.log('🎤 [AUDIO] Audio blob created:', {
+          size: audioBlob.size,
+          type: audioBlob.type,
+          chunkCount: chunks.length,
+          sizeInKB: (audioBlob.size / 1024).toFixed(2)
+        });
+
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => {
+          console.log('🎤 [AUDIO] Stopping track:', track.kind, track.label);
+          track.stop();
+        });
+
+        try {
+          console.log('🎤 [AUDIO] Initializing Gemini client for transcription...');
+          // Use Gemini client to transcribe audio
+          let client = geminiClient;
+          if (!client) {
+            console.log('🎤 [AUDIO] Creating new Gemini client with audio support...');
+            client = new GeminiClient({
+              expectedInputs: [
+                { type: 'text', languages: ['en'] },
+                { type: 'audio', languages: ['en'] }
+              ],
+              expectedOutputs: [
+                { type: 'text', languages: ['en'] }
+              ]
+            });
+            await client.initializeSession(undefined, { enableAudioInput: true });
+            setGeminiClient(client);
+            console.log('🎤 [AUDIO] Gemini client initialized with audio support');
           }
+
+          console.log('🎤 [AUDIO] Sending audio to Prompt API for transcription...');
+          const transcription = await client.transcribeAudio(audioBlob);
+          console.log('🎤 [AUDIO] Transcription received:', {
+            length: transcription.length,
+            preview: transcription.substring(0, 100)
+          });
+
+          // Append transcription to existing answer
+          setMockAnswer(prev => prev ? `${prev} ${transcription}` : transcription);
+          setStatus('✅ Audio transcribed successfully!');
+          console.log('🎤 [AUDIO] Transcription complete!');
+        } catch (error: any) {
+          console.error('🎤 [AUDIO] ❌ Transcription error:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          });
+          setStatus('❌ Failed to transcribe audio. Please try again.');
+          alert(`Transcription failed: ${error.message}\n\nPlease try again or type your answer instead.`);
         }
-
-        setMockAnswer(finalTranscript + interimTranscript);
       };
 
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
+      recorder.onerror = (event: any) => {
+        console.error('🎤 [AUDIO] ❌ MediaRecorder error:', event.error);
         setIsRecording(false);
+        setStatus('❌ Recording error occurred');
+        alert(`Recording error: ${event.error}`);
 
-        let errorMessage = '❌ Speech recognition error';
-        if (event.error === 'not-allowed') {
-          errorMessage = '❌ Microphone permission denied. Please allow microphone access in your browser settings.';
-        } else if (event.error === 'no-speech') {
-          errorMessage = '⚠️ No speech detected. Please try again.';
-        } else if (event.error === 'network') {
-          errorMessage = '❌ Network error. Please check your connection.';
-        } else {
-          errorMessage = `❌ Speech recognition error: ${event.error}`;
-        }
-
-        setStatus(errorMessage);
-        alert(errorMessage);
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
       };
 
-      recognition.onend = () => {
-        setIsRecording(false);
-        setStatus('✅ Recording stopped');
-      };
+      // Store the recorder
+      setMediaRecorder(recorder);
 
-      // Store recognition instance for stopping
-      (window as any).currentRecognition = recognition;
-      recognition.start();
+      // Start recording
+      console.log('🎤 [AUDIO] Starting MediaRecorder...');
+      recorder.start();
 
     } catch (error: any) {
-      console.error('Microphone permission error:', error);
+      console.error('🎤 [AUDIO] ❌ Error starting voice recording:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
       setIsRecording(false);
 
-      let errorMessage = '❌ Could not access microphone';
+      let errorMessage = `❌ Error: ${error.message}`;
       if (error.name === 'NotAllowedError') {
-        errorMessage = '❌ Microphone permission denied. Please allow microphone access in your browser settings and try again.';
+        errorMessage = '❌ Microphone permission denied. Please allow microphone access in your browser settings.';
       } else if (error.name === 'NotFoundError') {
         errorMessage = '❌ No microphone found. Please connect a microphone and try again.';
-      } else {
-        errorMessage = `❌ Microphone error: ${error.message}`;
       }
 
       setStatus(errorMessage);
@@ -583,10 +794,16 @@ function App() {
   }
 
   function stopVoiceRecording() {
-    const recognition = (window as any).currentRecognition;
-    if (recognition) {
-      recognition.stop();
-      setIsRecording(false);
+    console.log('🎤 [AUDIO] Stop recording requested');
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      console.log('🎤 [AUDIO] Stopping MediaRecorder...', {
+        state: mediaRecorder.state,
+        mimeType: mediaRecorder.mimeType
+      });
+      mediaRecorder.stop();
+      setStatus('⏳ Processing recording...');
+    } else {
+      console.warn('🎤 [AUDIO] Cannot stop - MediaRecorder is inactive or null');
     }
   }
 
@@ -625,10 +842,8 @@ function App() {
   }
 
   const tabs = [
-    { id: 'interview-prep', label: '🎯 Interview Prep', icon: '📋' },
-    { id: 'mock-interview', label: '🎤 Mock Interview', icon: '🎙️' },
-    { id: 'feedback', label: '💬 Answer Feedback', icon: '🎤' },
-    { id: 'improve', label: '✍️ Improve Text', icon: '✨' }
+    { id: 'interview-prep', label: 'Interview Prep', icon: '📋' },
+    { id: 'mock-interview', label: 'Mock Interview', icon: '🎙️' }
   ] as const;
 
   // Check if running in iframe (sidebar mode)
@@ -760,7 +975,9 @@ function App() {
                     <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
                       🔍 Job Description Analysis
                     </h3>
-                    <div className="text-gray-700 whitespace-pre-wrap">{jdAnalysisResult}</div>
+                    <div className="text-gray-700 prose prose-sm max-w-none">
+                      <ReactMarkdown>{jdAnalysisResult}</ReactMarkdown>
+                    </div>
                   </div>
                 )}
 
@@ -769,7 +986,9 @@ function App() {
                     <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
                       💭 Likely Interview Questions
                     </h3>
-                    <div className="text-gray-700 whitespace-pre-wrap">{interviewQuestions}</div>
+                    <div className="text-gray-700 prose prose-sm max-w-none">
+                      <ReactMarkdown>{interviewQuestions}</ReactMarkdown>
+                    </div>
                     <button
                       onClick={() => setActiveTab('mock-interview')}
                       className="mt-4 w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
@@ -791,12 +1010,12 @@ function App() {
                     </label>
                     <input
                       type="file"
-                      accept=".txt,.md,.pdf,.docx,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.gif,.webp,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
                       onChange={handleResumeFileChange}
                       className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700"
                     />
                     <p className="mt-1 text-xs text-gray-500">
-                      📄 Supports: TXT, MD (instant), PDF, DOCX (cloud parsing)
+                      📄 Supports: TXT, MD (instant), Images (AI extraction), PDF, DOCX (cloud parsing)
                     </p>
                     {resumeFilename && (
                       <p className="mt-2 text-sm text-green-600 flex items-center gap-2">
@@ -833,35 +1052,38 @@ function App() {
 
                   {coverLetterResult && (
                     <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
-                      <h4 className="font-semibold mb-2">Generated Cover Letter</h4>
-                      <div className="text-gray-800 whitespace-pre-wrap">{coverLetterResult}</div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold">Generated Cover Letter</h4>
+                        <button
+                          onClick={handleCopyCoverLetter}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
+                            copySuccess
+                              ? 'bg-green-600 text-white'
+                              : 'bg-purple-600 text-white hover:bg-purple-700'
+                          }`}
+                        >
+                          {copySuccess ? (
+                            <>
+                              ✓ 
+                            </>
+                          ) : (
+                            <>
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="text-gray-800 prose prose-sm max-w-none">
+                        <ReactMarkdown>{coverLetterResult}</ReactMarkdown>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
             )}
-
-            {/* Feedback Tab */}
-            {/* {activeTab === 'feedback' && (
-              <div>
-                <p className="text-gray-600 mb-4">
-                  Get AI-powered feedback on your interview responses, including analysis of clarity, structure, and communication style.
-                </p>
-                <button
-                  onClick={() => handleGetFeedback()}
-                  disabled={loading || availability !== 'available'}
-                  className="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? '⏳ Processing...' : '🎯 Get AI Feedback'}
-                </button>
-                {feedbackResult && (
-                  <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <h3 className="font-semibold text-purple-900 mb-2">AI Feedback:</h3>
-                    <p className="text-gray-700 whitespace-pre-wrap">{feedbackResult}</p>
-                  </div>
-                )}
-              </div>
-            )} */}
 
             {/* Mock Interview Tab */}
             {activeTab === 'mock-interview' && (
@@ -873,7 +1095,7 @@ function App() {
                 {/* Microphone Permission Info */}
                 <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <p className="text-sm text-blue-800">
-                    🎤 <strong>Voice Input:</strong> Click "Start Voice Recording" to allow microphone access. You'll be prompted for permission on first use.
+                    🎤 <strong>Voice Input:</strong> Using Gemini Nano's built-in audio transcription. Click "Start Voice Recording" to begin. You'll be prompted for microphone permission on first use.
                   </p>
                 </div>
 
@@ -1028,60 +1250,27 @@ function App() {
                 {/* Feedback Result */}
                 {mockFeedback && (
                   <div className="mt-6 p-5 bg-purple-50 rounded-lg border-2 border-purple-200">
-                    <h3 className="font-semibold text-purple-900 mb-3 text-lg flex items-center gap-2">
-                      📊 AI Evaluation & Feedback
+                    <h3 className="font-semibold text-purple-900 mb-3">
+                      AI Feedback
                     </h3>
-                    <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">{mockFeedback}</div>
+                    <div className="text-gray-700 prose prose-sm max-w-none">
+                      <ReactMarkdown>{mockFeedback}</ReactMarkdown>
+                    </div>
                   </div>
                 )}
               </div>
             )}
-
-            {/* Improve Tab */}
-            {activeTab === 'improve' && (
-              <div>
-                <p className="text-gray-600 mb-4">
-                  Enhance your text with different writing styles.
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    onClick={() => handleImproveText('professional')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    💼 Professional
-                  </button>
-                  <button
-                    onClick={() => handleImproveText('casual')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    😊 Casual
-                  </button>
-                  <button
-                    onClick={() => handleImproveText('concise')}
-                    disabled={loading || availability !== 'available'}
-                    className="bg-orange-600 text-white py-3 rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    ✂️ Concise
-                  </button>
-                </div>
-                {improveResult && (
-                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <h3 className="font-semibold text-blue-900 mb-2">Improved Text:</h3>
-                    <p className="text-gray-700 whitespace-pre-wrap">{improveResult}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
           </div>
         </div>
 
         {/* Footer */}
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p>🔒 100% Private • All processing happens on your device</p>
-          <p className="mt-1">Powered by Chrome's Gemini Nano</p>
+        <div className="mt-8 text-center text-gray-500 text-sm">
+          <p>
+            &copy; 2025 InterviewCoach.AI. All rights reserved.
+          </p>
+          <p>
+            Built with ❤️ by Siddhesh Shirdhankar. Check out the <a href="https://github.com/Sid-1819/interview-coach-ai" target="_blank" className="text-purple-600 hover:underline">GitHub repo</a> for more info.
+          </p>
         </div>
       </div>
     </div>
