@@ -70,7 +70,7 @@ function App() {
     const questions: string[] = [];
 
     for (const line of lines) {
-      // Remove numbering like "1.", "2.", etc.
+      // Remove numbering like "1.", "2.", etc."
       const cleaned = line.replace(/^\d+\.\s*/, '').trim();
       // Only add non-empty lines that look like questions or statements
       if (cleaned.length > 10) {
@@ -158,24 +158,24 @@ function App() {
     try {
       // Check Prompt API
       if (!('LanguageModel' in window)) {
-        setStatus("❌ Prompt API not supported. Please use Chrome 127+ and enable flags.");
+        setStatus(" Prompt API not supported. Please use Chrome 127+ and enable flags.");
         setAvailability("unavailable");
       } else {
         const availabilityStatus = await (window as any).LanguageModel.availability();
         setAvailability(availabilityStatus);
 
         if (availabilityStatus === 'available') {
-          setStatus("✅ Gemini Nano is ready!");
+          setStatus(" Gemini Nano is ready!");
         } else if (availabilityStatus === 'downloading') {
-          setStatus("⏳ Gemini Nano is downloading... Please wait.");
+          setStatus(" Gemini Nano is downloading... Please wait.");
           pollForAvailability();
         } else {
-          setStatus("❌ Gemini Nano not available. Check setup instructions below.");
+          setStatus(" Gemini Nano not available. Check setup instructions below.");
         }
       }
     } catch (error) {
       console.error('Error checking availability:', error);
-      setStatus("❌ Error checking API. Make sure flags are enabled.");
+      setStatus(" Error checking API. Make sure flags are enabled.");
       setAvailability("unavailable");
     }
   }
@@ -187,10 +187,10 @@ function App() {
         setAvailability(availabilityStatus);
 
         if (availabilityStatus === 'available') {
-          setStatus("✅ Gemini Nano download complete! Ready to use.");
+          setStatus(" Gemini Nano download complete! Ready to use.");
           clearInterval(interval);
         } else if (availabilityStatus === 'unavailable') {
-          setStatus("❌ Download failed. Please check your setup.");
+          setStatus(" Download failed. Please check your setup.");
           clearInterval(interval);
         }
       } catch (error) {
@@ -571,8 +571,8 @@ function App() {
   }
 
   const tabs = [
-    { id: 'interview-prep', label: '🎯 Interview Prep', icon: '📋' },
-    { id: 'mock-interview', label: '🎤 Mock Interview', icon: '🎙️' }
+    { id: 'interview-prep', label: 'Interview Prep', icon: '📋' },
+    { id: 'mock-interview', label: 'Mock Interview', icon: '🎙️' }
   ] as const;
 
   // Check if running in iframe (sidebar mode)
@@ -979,24 +979,27 @@ function App() {
                 {/* Feedback Result */}
                 {mockFeedback && (
                   <div className="mt-6 p-5 bg-purple-50 rounded-lg border-2 border-purple-200">
-                    <h3 className="font-semibold text-purple-900 mb-3 text-lg flex items-center gap-2">
-                      📊 AI Evaluation & Feedback
+                    <h3 className="font-semibold text-purple-900 mb-3">
+                      AI Feedback
                     </h3>
-                    <div className="text-gray-800 prose prose-sm max-w-none">
+                    <div className="text-gray-700 prose prose-sm max-w-none">
                       <ReactMarkdown>{mockFeedback}</ReactMarkdown>
                     </div>
                   </div>
                 )}
               </div>
             )}
-
           </div>
         </div>
 
         {/* Footer */}
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p>🔒 100% Private • All processing happens on your device</p>
-          <p className="mt-1">Powered by Chrome's Gemini Nano</p>
+        <div className="mt-8 text-center text-gray-500 text-sm">
+          <p>
+            &copy; 2025 InterviewCoach.AI. All rights reserved.
+          </p>
+          <p>
+            Built with ❤️ by Siddhesh Shirdhankar. Check out the <a href="https://github.com/Sid-1819/interview-coach-ai" target="_blank" className="text-purple-600 hover:underline">GitHub repo</a> for more info.
+          </p>
         </div>
       </div>
     </div>
