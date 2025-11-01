@@ -43,6 +43,26 @@ function App() {
   useEffect(() => {
     checkAvailability();
     checkContextMenuAction();
+    restorePersistedState();
+  }, []);
+
+  // Listen for storage changes to detect new context menu actions while panel is open
+  useEffect(() => {
+    const handleStorageChange = (changes: any, areaName: string) => {
+      if (areaName === 'local' && changes.contextMenuAction) {
+        console.log('🔔 [STORAGE] New context menu action detected while panel is open');
+        checkContextMenuAction();
+      }
+    };
+
+    try {
+      chrome.storage.onChanged.addListener(handleStorageChange);
+      return () => {
+        chrome.storage.onChanged.removeListener(handleStorageChange);
+      };
+    } catch (error) {
+      console.log('Not running in extension context:', error);
+    }
   }, []);
 
   // Initialize Gemini client when API becomes available
@@ -59,6 +79,53 @@ function App() {
       setQuestionsList(parsed);
     }
   }, [interviewQuestions]);
+
+  // Persist state to chrome.storage.local when it changes
+  useEffect(() => {
+    const persistState = async () => {
+      try {
+        await chrome.storage.local.set({
+          persistedState: {
+            jobDescription,
+            jdAnalysisResult,
+            interviewQuestions,
+            resumeText,
+            resumeFilename,
+            coverLetterResult,
+            activeTab
+          }
+        });
+        console.log('💾 [PERSIST] State saved to storage');
+      } catch (error) {
+        console.log('Not running in extension context or error:', error);
+      }
+    };
+
+    // Debounce the save operation to avoid excessive writes
+    const timeoutId = setTimeout(persistState, 500);
+    return () => clearTimeout(timeoutId);
+  }, [jobDescription, jdAnalysisResult, interviewQuestions, resumeText, resumeFilename, coverLetterResult, activeTab]);
+
+  // Restore persisted state from chrome.storage.local on mount
+  async function restorePersistedState() {
+    try {
+      const result = await chrome.storage.local.get(['persistedState']);
+      if (result.persistedState) {
+        const state = result.persistedState;
+        console.log('📂 [RESTORE] Restoring persisted state:', state);
+
+        if (state.jobDescription) setJobDescription(state.jobDescription);
+        if (state.jdAnalysisResult) setJdAnalysisResult(state.jdAnalysisResult);
+        if (state.interviewQuestions) setInterviewQuestions(state.interviewQuestions);
+        if (state.resumeText) setResumeText(state.resumeText);
+        if (state.resumeFilename) setResumeFilename(state.resumeFilename);
+        if (state.coverLetterResult) setCoverLetterResult(state.coverLetterResult);
+        if (state.activeTab) setActiveTab(state.activeTab);
+      }
+    } catch (error) {
+      console.log('Not running in extension context or error:', error);
+    }
+  }
 
   // Initialize Gemini client once at startup with multimodal support (text, audio, image)
   async function initializeClient() {
@@ -619,7 +686,7 @@ function App() {
 
       setStatus('Generating cover letter...');
 
-  const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). IMPORTANT: Keep the cover letter under 250 words.`;
+  const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). IMPORTANT: Keep the cover letter under 250 words. do not add company address .`;
 
   const userPrompt = `---\nJob Description Analysis:\n${analysis}\n\n---\nApplicant Resume:\n${resumeText}\n\n---\nWrite a cover letter for this candidate applying to the job described above. Reference both the job requirements and the candidate's relevant experience. Make the letter unique to this application.`;
 

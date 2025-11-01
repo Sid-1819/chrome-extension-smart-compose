@@ -313,7 +313,6 @@ class NudgeBadge {
     nudge.id = 'interview-coach-nudge';
     nudge.className = 'interview-coach-nudge-hidden';
     nudge.innerHTML = `
-      <div class="nudge-icon">🎯</div>
       <div class="nudge-content">
         <div class="nudge-title"></div>
         <div class="nudge-subtitle">Click to view</div>
@@ -345,7 +344,7 @@ class NudgeBadge {
         position: fixed;
         bottom: 24px;
         right: 24px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #4a4a4a 0%, #2a2a2a 100%);
         color: white;
         padding: 16px 20px;
         border-radius: 16px;
@@ -355,7 +354,7 @@ class NudgeBadge {
         align-items: center;
         gap: 12px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.5);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         user-select: none;
         min-width: 280px;
@@ -369,7 +368,7 @@ class NudgeBadge {
 
       #interview-coach-nudge:hover {
         transform: translateY(-4px) scale(1.02);
-        box-shadow: 0 12px 32px rgba(102, 126, 234, 0.7);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
       }
 
       #interview-coach-nudge:active {
@@ -378,13 +377,6 @@ class NudgeBadge {
 
       .interview-coach-nudge-hidden {
         display: none !important;
-      }
-
-      .nudge-icon {
-        font-size: 32px;
-        line-height: 1;
-        flex-shrink: 0;
-        animation: nudgePulse 2s ease-in-out infinite;
       }
 
       .nudge-content {
@@ -417,15 +409,6 @@ class NudgeBadge {
         100% {
           transform: translateX(0);
           opacity: 1;
-        }
-      }
-
-      @keyframes nudgePulse {
-        0%, 100% {
-          transform: scale(1);
-        }
-        50% {
-          transform: scale(1.1);
         }
       }
     `;

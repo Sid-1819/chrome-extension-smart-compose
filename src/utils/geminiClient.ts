@@ -814,12 +814,12 @@ Email draft:`;
   }
 
   /**
-   * Evaluate mock interview answer with detailed feedback and rating
+   * Evaluate mock interview answer with detailed feedback, overall rating, and confidence assessment
    */
   async evaluateMockInterviewAnswer(question: string, answer: string): Promise<string> {
     const systemPrompt = `You are an expert interview coach providing detailed, actionable feedback on mock interview answers.
-Evaluate the answer holistically considering content quality, structure, clarity, and relevance.
-Provide a rating out of 10 and specific, constructive feedback.`;
+Evaluate the answer holistically considering content quality, structure, clarity, relevance, and confidence level.
+Provide both an overall rating and a confidence rating with specific, constructive feedback.`;
 
     const prompt = `Evaluate this mock interview answer:
 
@@ -829,8 +829,11 @@ Provide a rating out of 10 and specific, constructive feedback.`;
 
 Format your evaluation EXACTLY like this:
 
-**📊 Rating: X/10**
+**📊 Overall Rating: X/10**
 [One sentence explaining the overall rating]
+
+**🎭 Confidence Level: X/10**
+[One sentence explaining the confidence assessment based on language patterns]
 
 **✅ Strengths**
 • [Specific strength 1]
@@ -842,6 +845,10 @@ Format your evaluation EXACTLY like this:
 • [Specific area 2 with actionable advice]
 • [Specific area 3 if applicable]
 
+**🗣️ Confidence Feedback**
+• [Specific observation about confidence indicators]
+• [Actionable advice to sound more confident]
+
 **💡 Key Takeaways**
 • [Main lesson or improvement focus]
 • [Additional tip for next time]
@@ -849,21 +856,50 @@ Format your evaluation EXACTLY like this:
 **🎯 Suggested Enhancement** (if rating < 7/10)
 [Provide a brief example of how to improve 1-2 key sentences from the answer]
 
-EVALUATION CRITERIA:
+EVALUATION CRITERIA (Overall Rating):
 - Content Relevance (30%): Does it answer the question directly?
 - Structure & Clarity (25%): Is it well-organized (e.g., STAR method for behavioral)?
 - Specificity (20%): Are there concrete examples and details?
 - Communication (15%): Is it clear, professional, and confident?
 - Impact (10%): Does it demonstrate value and results?
 
-RATING SCALE:
+CONFIDENCE ASSESSMENT CRITERIA (Confidence Level Rating):
+Analyze the language patterns to assess confidence:
+- **High Confidence (8-10):** Direct statements, assertive language, minimal hedging, clear ownership of accomplishments, strong action verbs
+- **Moderate Confidence (5-7):** Some hesitation markers, occasional hedging (I think, maybe, kind of), mix of strong and weak language
+- **Low Confidence (1-4):** Frequent filler words (um, uh, like), excessive hedging (sort of, I guess, probably), apologetic tone, lack of ownership
+
+KEY CONFIDENCE INDICATORS TO CHECK:
+✅ Positive (Confident):
+- Assertive statements ("I led...", "I achieved...", "I implemented...")
+- Specific numbers and metrics
+- Direct language without qualifiers
+- Strong action verbs (spearheaded, architected, drove, established)
+
+⚠️ Negative (Less Confident):
+- Hedging words: maybe, kind of, sort of, I think, I guess, probably, possibly
+- Filler words: um, uh, like, you know, basically, actually (when overused)
+- Minimizing language: just, only, simply, a little bit
+- Apologetic tone or excessive self-deprecation
+- Vague or uncertain statements
+- Lack of ownership (we did vs I contributed)
+
+RATING SCALES:
+Overall Rating:
 - 9-10: Excellent answer, interview-ready
 - 7-8: Good answer with minor improvements needed
 - 5-6: Adequate but needs significant work
 - 3-4: Weak answer, missing key elements
 - 1-2: Poor answer, needs complete rework
 
-Be honest, specific, and constructive. Focus on actionable improvements.
+Confidence Level:
+- 9-10: Highly confident, assertive, and compelling delivery
+- 7-8: Generally confident with minor hesitations
+- 5-6: Moderately confident, noticeable hedging or uncertainty
+- 3-4: Low confidence, frequent hedging and weak language
+- 1-2: Very uncertain, apologetic, or overly tentative
+
+Be honest, specific, and constructive. Focus on actionable improvements for both content and confidence.
 
 Provide your evaluation:`;
 

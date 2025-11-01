@@ -62,7 +62,7 @@ class InterviewCoachBackground {
       chrome.contextMenus.create({
         id: 'analyze-job-description',
         parentId: 'interview-coach-parent',
-        title: '🔍 Analyze Job Description',
+        title: 'Analyze Job Description',
         contexts: ['selection']
       });
 
@@ -70,7 +70,7 @@ class InterviewCoachBackground {
       chrome.contextMenus.create({
         id: 'generate-questions',
         parentId: 'interview-coach-parent',
-        title: '💭 Generate Interview Questions',
+        title: ' Generate Interview Questions',
         contexts: ['selection']
       });
 
@@ -82,21 +82,6 @@ class InterviewCoachBackground {
         contexts: ['selection']
       });
 
-      // Get Interview Feedback
-      chrome.contextMenus.create({
-        id: 'get-feedback',
-        parentId: 'interview-coach-parent',
-        title: '💬 Get Answer Feedback',
-        contexts: ['selection']
-      });
-
-      // Improve Text
-      chrome.contextMenus.create({
-        id: 'improve-text',
-        parentId: 'interview-coach-parent',
-        title: '✨ Improve Text',
-        contexts: ['selection']
-      });
 
       console.log('InterviewCoach.AI: Context menus created');
     });
@@ -137,14 +122,6 @@ class InterviewCoachBackground {
           case 'generate-questions':
             badgeText = 'Questions Ready';
             badgeTitle = 'Interview Questions Ready';
-            break;
-          case 'get-feedback':
-            badgeText = 'Feedback Ready';
-            badgeTitle = 'Feedback Ready';
-            break;
-          case 'improve-text':
-            badgeText = 'Improvement Ready';
-            badgeTitle = 'Text Improvement Ready';
             break;
         }
 
