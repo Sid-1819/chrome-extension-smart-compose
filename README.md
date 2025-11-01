@@ -35,8 +35,10 @@
 2. Set to **"Enabled BypassPerfRequirement"**
 3. Navigate to `chrome://flags/#prompt-api-for-gemini-nano`
 4. Set to **"Enabled"**
-5. **Restart Chrome**
-6. Wait for Gemini Nano to download (~1-2GB, one-time)
+5. Navigate to `chrome://flags/#prompt-api-for-gemini-nano-multimodal-input`
+6. Set to **"Enabled"**
+7. **Restart Chrome**
+8. Wait for Gemini Nano to download (~1-2GB, one-time)
 
 📖 **Detailed setup guide:** [PROMPT_API_SETUP.md](PROMPT_API_SETUP.md)
 
