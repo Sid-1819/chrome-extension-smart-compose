@@ -24,9 +24,7 @@ export function LoadingSpinner({
         {/* Sparkles animation */}
         {showSparkles && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="absolute animate-ping">
-              <span className="inline-flex h-3 w-3 rounded-full bg-purple-400 opacity-75"></span>
-            </div>
+            <span className="h-3 w-3 rounded-full bg-gray-600 opacity-75 animate-ping"></span>
           </div>
         )}
       </div>
@@ -75,10 +73,10 @@ export function StreamingIndicator({ isStreaming }: StreamingIndicatorProps) {
 
   return (
     <div className="flex items-center gap-2 text-sm text-gray-600 animate-pulse">
-      <div className="flex gap-1">
-        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+      <div className="flex items-center gap-1 h-5">
+        <span className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+        <span className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+        <span className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
       </div>
       <span className="font-medium">AI is thinking...</span>
     </div>

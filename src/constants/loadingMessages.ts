@@ -16,7 +16,7 @@ export const LOADING_MESSAGES = {
   UPLOADING_RESUME: 'Processing resume...',
   PARSING_RESUME: 'Extracting text from document...',
   EXTRACTING_IMAGE: 'Extracting text from image using AI...',
-  EXTRACTING_IMAGE_SUB: 'Using on-device vision model for privacy',
+  EXTRACTING_IMAGE_SUB: 'Using on-device model for privacy',
   PROCESSING_RESUME_API: 'Processing resume via cloud API...',
 
   // Cover Letter
