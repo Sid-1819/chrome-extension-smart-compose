@@ -80,6 +80,18 @@ function App() {
     }
   }, [interviewQuestions]);
 
+  // Clear old analysis result, cover letter, and resume when job description changes
+  useEffect(() => {
+    // Only clear if there's actually something to clear
+    if (jdAnalysisResult || coverLetterResult || resumeText) {
+      setJdAnalysisResult('');
+      setCoverLetterResult('');
+      setResumeText('');
+      setResumeFilename(null);
+      console.log('🔄 [JD-CHANGE] Job description changed - cleared old analysis, cover letter, and resume');
+    }
+  }, [jobDescription]);
+
   // Persist state to chrome.storage.local when it changes
   useEffect(() => {
     const persistState = async () => {
@@ -686,7 +698,7 @@ function App() {
 
       setStatus('Generating cover letter...');
 
-  const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). IMPORTANT: Keep the cover letter under 250 words. do not add company address .`;
+  const systemPrompt = `You are an expert cover-letter writer. Write a compelling, concise, and highly tailored cover letter for a job application. You MUST use and reference both the provided job description analysis and the applicant's resume. Structure the letter in 3 short paragraphs: (1) Introduction and intent, (2) Why the candidate is a great fit—reference specific skills/experiences from the resume that match the job requirements, (3) Closing with a call to action. Be specific, professional, and persuasive. Avoid generic statements. Address the letter to the hiring manager (no name needed). IMPORTANT: Keep the cover letter under 250 words. remove salutations and do not add company address .`;
 
   const userPrompt = `---\nJob Description Analysis:\n${analysis}\n\n---\nApplicant Resume:\n${resumeText}\n\n---\nWrite a cover letter for this candidate applying to the job described above. Reference both the job requirements and the candidate's relevant experience. Make the letter unique to this application.`;
 
