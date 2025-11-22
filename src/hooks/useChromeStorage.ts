@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import type { PersistedState, ContextMenuData } from "@/types";
+import { logger } from "@/utils/logger";
 
 interface UseChromeStorageReturn {
   persistState: (state: PersistedState) => Promise<void>;
@@ -14,9 +15,9 @@ export function useChromeStorage(): UseChromeStorageReturn {
   const persistState = useCallback(async (state: PersistedState) => {
     try {
       await chrome.storage.local.set({ persistedState: state });
-      console.log("State saved to storage");
+      logger.debug("State saved to storage");
     } catch (error) {
-      console.log("Not running in extension context or error:", error);
+      logger.debug("Not running in extension context or error:", error);
     }
   }, []);
 
@@ -24,12 +25,12 @@ export function useChromeStorage(): UseChromeStorageReturn {
     try {
       const result = await chrome.storage.local.get(["persistedState"]);
       if (result.persistedState) {
-        console.log("Restoring persisted state:", result.persistedState);
+        logger.debug("Restoring persisted state:", result.persistedState);
         return result.persistedState as PersistedState;
       }
       return null;
     } catch (error) {
-      console.log("Not running in extension context or error:", error);
+      logger.debug("Not running in extension context or error:", error);
       return null;
     }
   }, []);
@@ -56,7 +57,7 @@ export function useChromeStorage(): UseChromeStorageReturn {
       }
       return null;
     } catch (error) {
-      console.log("Not running in extension context or error:", error);
+      logger.debug("Not running in extension context or error:", error);
       return null;
     }
   }, []);
@@ -69,7 +70,7 @@ export function useChromeStorage(): UseChromeStorageReturn {
         "timestamp",
       ]);
     } catch (error) {
-      console.log("Error clearing context menu action:", error);
+      logger.debug("Error clearing context menu action:", error);
     }
   }, []);
 
@@ -77,16 +78,16 @@ export function useChromeStorage(): UseChromeStorageReturn {
     try {
       await chrome.runtime.sendMessage({ type: "CLEAR_BADGE" });
     } catch (error) {
-      console.log("Could not clear badge:", error);
+      logger.debug("Could not clear badge:", error);
     }
   }, []);
 
   const clearAllState = useCallback(async () => {
     try {
       await chrome.storage.local.remove(["persistedState"]);
-      console.log("All persisted state cleared");
+      logger.debug("All persisted state cleared");
     } catch (error) {
-      console.log("Not running in extension context or error:", error);
+      logger.debug("Not running in extension context or error:", error);
     }
   }, []);
 
@@ -107,7 +108,7 @@ export function useChromeStorageListener(
   const handleStorageChange = useCallback(
     (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === "local" && changes.contextMenuAction) {
-        console.log("New context menu action detected while panel is open");
+        logger.debug("New context menu action detected while panel is open");
         onContextMenuAction();
       }
     },

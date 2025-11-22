@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import { logger } from '@/utils/logger';
 
 function MicPermission() {
   const [status, setStatus] = React.useState('Requesting microphone permission...');
@@ -14,7 +15,7 @@ function MicPermission() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      console.log('Microphone access granted');
+      logger.log('Microphone access granted');
       setStatus('✅ Microphone permission granted!');
       
       stream.getTracks().forEach(track => track.stop());
@@ -24,7 +25,7 @@ function MicPermission() {
       }, 1500);
       
     } catch (err: any) {
-      console.error('Error requesting microphone permission:', err);
+      logger.error('Error requesting microphone permission:', err);
       setError(true);
       
       if (err.name === 'NotAllowedError') {

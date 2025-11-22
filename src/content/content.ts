@@ -5,6 +5,20 @@
  * Injects sidebar for interview prep features
  */
 
+// Development-only logger (checks if extension is installed from store)
+const isDev = (() => {
+  try {
+    return !('update_url' in chrome.runtime.getManifest());
+  } catch {
+    return true;
+  }
+})();
+const log = {
+  info: (...args: unknown[]) => isDev && console.log('[InterviewCoach]', ...args),
+  error: (...args: unknown[]) => isDev && console.error('[InterviewCoach]', ...args),
+  warn: (...args: unknown[]) => isDev && console.warn('[InterviewCoach]', ...args),
+};
+
 interface MessagePayload {
   type: 'TEXT_CAPTURED' | 'OPEN_SIDEBAR' | 'SHOW_NUDGE' | 'HIDE_NUDGE' | 'PING';
   text?: string;
@@ -24,7 +38,7 @@ class InterviewCoachSidebar {
   private isVisible: boolean = false;
 
   constructor() {
-    console.log('InterviewCoach AI: Sidebar class initialized');
+    log.info(' Sidebar class initialized');
     this.createSidebar();
     this.setupMessageListener();
   }
@@ -33,7 +47,7 @@ class InterviewCoachSidebar {
     // Check if sidebar already exists
     const existing = document.getElementById('interview-coach-sidebar');
     if (existing) {
-      console.log('InterviewCoach AI: Sidebar already exists, reusing');
+      log.info(' Sidebar already exists, reusing');
       this.sidebar = existing;
       this.iframe = document.getElementById('interview-coach-iframe') as HTMLIFrameElement;
       return;
@@ -64,10 +78,10 @@ class InterviewCoachSidebar {
 
     // Ensure iframe loads properly
     iframe.onload = () => {
-      console.log('InterviewCoach AI: Iframe loaded successfully');
+      log.info(' Iframe loaded successfully');
     };
     iframe.onerror = (error) => {
-      console.error('InterviewCoach AI: Iframe failed to load', error);
+      log.error(' Iframe failed to load', error);
     };
 
     // Assemble sidebar
@@ -88,7 +102,7 @@ class InterviewCoachSidebar {
     this.sidebar = sidebar;
     this.iframe = iframe;
 
-    console.log('InterviewCoach AI: Sidebar created');
+    log.info(' Sidebar created');
   }
 
   private setupResizeHandle(sidebar: HTMLElement): void {
@@ -265,7 +279,7 @@ class InterviewCoachSidebar {
       }, 500);
     }
 
-    console.log('InterviewCoach AI: Sidebar shown', action);
+    log.info(' Sidebar shown', action);
   }
 
   public hide(): void {
@@ -276,7 +290,7 @@ class InterviewCoachSidebar {
     document.body.classList.remove('interview-coach-sidebar-open');
     this.isVisible = false;
 
-    console.log('InterviewCoach AI: Sidebar hidden');
+    log.info(' Sidebar hidden');
   }
 
   public toggle(): void {
@@ -297,7 +311,7 @@ class NudgeBadge {
 
   constructor() {
     this.createNudge();
-    console.log('InterviewCoach AI: Nudge badge initialized');
+    log.info(' Nudge badge initialized');
   }
 
   private createNudge(): void {
@@ -306,7 +320,7 @@ class NudgeBadge {
     if (existing) {
       // Remove old element and recreate to ensure fresh click handlers
       existing.remove();
-      console.log('InterviewCoach AI: Removed old nudge badge, creating fresh one');
+      log.info(' Removed old nudge badge, creating fresh one');
     }
 
     // Create nudge container
@@ -330,7 +344,7 @@ class NudgeBadge {
     document.body.appendChild(nudge);
     this.nudge = nudge;
 
-    console.log('InterviewCoach AI: Nudge badge created');
+    log.info(' Nudge badge created');
   }
 
   private injectStyles(): void {
@@ -434,7 +448,7 @@ class NudgeBadge {
     this.nudge.classList.add('show');
     this.isVisible = true;
 
-    console.log('InterviewCoach AI: Nudge badge shown -', badgeText);
+    log.info(' Nudge badge shown -', badgeText);
 
     // Auto-hide after 10 seconds
     setTimeout(() => {
@@ -449,11 +463,11 @@ class NudgeBadge {
     this.nudge.classList.add('interview-coach-nudge-hidden');
     this.isVisible = false;
 
-    console.log('InterviewCoach AI: Nudge badge hidden');
+    log.info(' Nudge badge hidden');
   }
 
   private async handleClick(): Promise<void> {
-    console.log('InterviewCoach AI: Nudge badge clicked');
+    log.info(' Nudge badge clicked');
 
     // Hide nudge first
     this.hide();
@@ -463,16 +477,16 @@ class NudgeBadge {
       // Check if extension context is still valid
       if (chrome.runtime?.id) {
         await chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' });
-        console.log('InterviewCoach AI: Side panel open request sent');
+        log.info(' Side panel open request sent');
       } else {
-        console.log('InterviewCoach AI: Extension context invalid, user should click extension icon');
+        log.info(' Extension context invalid, user should click extension icon');
       }
     } catch (error: any) {
       // If context is invalidated, just log it - the user can click the extension icon
       if (error.message?.includes('Extension context invalidated')) {
-        console.log('InterviewCoach AI: Extension context invalidated, please click extension icon');
+        log.info(' Extension context invalidated, please click extension icon');
       } else {
-        console.error('InterviewCoach AI: Error opening side panel:', error);
+        log.error(' Error opening side panel:', error);
       }
     }
   }
@@ -498,7 +512,7 @@ class InterviewCoachContentScript {
   }
 
   private init(): void {
-    console.log('InterviewCoach AI: Content script initialized');
+    log.info(' Content script initialized');
     this.setupNudgeMessageListener();
     this.attachInputListeners();
     this.detectPageType();
@@ -519,7 +533,7 @@ class InterviewCoachContentScript {
 
       // Handle SHOW_NUDGE
       if (message.type === 'SHOW_NUDGE') {
-        console.log('InterviewCoach AI: Showing nudge badge', message);
+        log.info(' Showing nudge badge', message);
         if (message.badgeText && message.badgeTitle) {
           this.nudgeBadge.show(message.badgeText, message.badgeTitle);
         }
@@ -529,7 +543,7 @@ class InterviewCoachContentScript {
 
       // Handle HIDE_NUDGE
       if (message.type === 'HIDE_NUDGE') {
-        console.log('InterviewCoach AI: Hiding nudge badge');
+        log.info(' Hiding nudge badge');
         this.nudgeBadge.hide();
         sendResponse({ success: true });
         return true;
@@ -547,13 +561,13 @@ class InterviewCoachContentScript {
     const url = window.location.href;
 
     if (url.includes('youtube.com')) {
-      console.log('InterviewCoach AI: YouTube detected');
+      log.info(' YouTube detected');
       this.handleYouTube();
     } else if (url.includes('meet.google.com')) {
-      console.log('InterviewCoach AI: Google Meet detected');
+      log.info(' Google Meet detected');
       this.handleGoogleMeet();
     } else {
-      console.log('InterviewCoach AI: Generic webpage detected');
+      log.info(' Generic webpage detected');
     }
   }
 
@@ -685,7 +699,7 @@ class InterviewCoachContentScript {
 
     if (text && text.length > 0) {
       this.sendToBackground('TEXT_CAPTURED', text);
-      console.log('InterviewCoach AI: Text captured:', text.substring(0, 50) + '...');
+      log.info(' Text captured:', text.substring(0, 50) + '...');
     }
   }
 
@@ -702,9 +716,9 @@ class InterviewCoachContentScript {
 
     chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
-        console.error('InterviewCoach AI: Error sending message:', chrome.runtime.lastError);
+        log.error(' Error sending message:', chrome.runtime.lastError);
       } else {
-        console.log('InterviewCoach AI: Message sent successfully:', response);
+        log.info(' Message sent successfully:', response);
       }
     });
   }
@@ -715,18 +729,18 @@ class InterviewCoachContentScript {
 if (!(window as any).__interviewCoachInitialized) {
   (window as any).__interviewCoachInitialized = true;
 
-  console.log('InterviewCoach AI: Initializing content script, readyState:', document.readyState);
+  log.info(' Initializing content script, readyState:', document.readyState);
 
   // Initialize the content script when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-      console.log('InterviewCoach AI: DOM loaded, creating content script');
+      log.info(' DOM loaded, creating content script');
       new InterviewCoachContentScript();
     });
   } else {
-    console.log('InterviewCoach AI: DOM already loaded, creating content script immediately');
+    log.info(' DOM already loaded, creating content script immediately');
     new InterviewCoachContentScript();
   }
 } else {
-  console.log('InterviewCoach AI: Content script already initialized, skipping');
+  log.info(' Content script already initialized, skipping');
 }

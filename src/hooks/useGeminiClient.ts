@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { GeminiClient } from "@/utils/geminiClient";
 import type { AvailabilityStatus } from "@/types";
+import { logger } from "@/utils/logger";
 
 interface UseGeminiClientOptions {
   autoInitialize?: boolean;
@@ -35,7 +36,7 @@ export function useGeminiClient(options: UseGeminiClientOptions = {}) {
         setStatus("Gemini Nano not available. Check setup instructions below.");
       }
     } catch (error) {
-      console.error("Error checking availability:", error);
+      logger.error("Error checking availability:", error);
       setStatus("Error checking API. Make sure flags are enabled.");
       setAvailability("unavailable");
     }
@@ -43,7 +44,7 @@ export function useGeminiClient(options: UseGeminiClientOptions = {}) {
 
   const initializeClient = useCallback(async () => {
     try {
-      console.log("Initializing Gemini client with multimodal support...");
+      logger.log("Initializing Gemini client with multimodal support...");
       const client = new GeminiClient({
         expectedInputs: [
           { type: "text", languages: ["en"] },
@@ -66,9 +67,9 @@ export function useGeminiClient(options: UseGeminiClientOptions = {}) {
       setDownloadProgress(null);
       setIsModelLoading(false);
       setStatus("Gemini Nano is ready!");
-      console.log("Gemini client initialized with text, audio, and image input support");
+      logger.log("Gemini client initialized with text, audio, and image input support");
     } catch (error) {
-      console.error("Failed to initialize client at startup:", error);
+      logger.error("Failed to initialize client at startup:", error);
       setDownloadProgress(null);
       setIsModelLoading(false);
     }

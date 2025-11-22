@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { GeminiClient } from "@/utils/geminiClient";
 import type { LoadingState } from "@/types";
 import { LOADING_MESSAGES } from "@/constants/loadingMessages";
+import { logger } from "@/utils/logger";
 
 interface UseVoiceRecordingOptions {
   geminiClient: GeminiClient | null;
@@ -26,12 +27,12 @@ export function useVoiceRecording({
   });
 
   const startRecording = useCallback(async () => {
-    console.log("Starting voice recording...");
+    logger.log("Starting voice recording...");
 
     try {
       // Check if Gemini Nano is available
       if (availability !== "available") {
-        console.warn("Gemini Nano not available");
+        logger.warn("Gemini Nano not available");
         alert("Gemini Nano is not available. Please ensure it is enabled and downloaded.");
         return;
       }
@@ -56,7 +57,7 @@ export function useVoiceRecording({
         setStatus("Please grant microphone permission in the popup window, then try recording again.");
         return;
       } else if (permissionStatus.state === "denied") {
-        console.error("Microphone permission denied");
+        logger.error("Microphone permission denied");
         setStatus("Microphone permission denied. Please click the microphone icon in the address bar to allow access.");
         alert("Microphone permission denied. Please allow microphone access in your browser settings:\n\n1. Click the microphone icon in the address bar\n2. Select \"Always allow\"\n3. Try recording again");
         return;
@@ -132,7 +133,7 @@ export function useVoiceRecording({
           setStatus("Audio transcribed successfully!");
           setAudioLoading({ isLoading: false, message: "" });
         } catch (error: any) {
-          console.error("Transcription error:", error);
+          logger.error("Transcription error:", error);
           setStatus("Failed to transcribe audio. Please try again.");
           setAudioLoading({ isLoading: false, message: "" });
           alert(`Transcription failed: ${error.message}\n\nPlease try again or type your answer instead.`);
@@ -140,7 +141,7 @@ export function useVoiceRecording({
       };
 
       recorder.onerror = (event: any) => {
-        console.error("MediaRecorder error:", event.error);
+        logger.error("MediaRecorder error:", event.error);
         setIsRecording(false);
         setStatus("Recording error occurred");
         alert(`Recording error: ${event.error}`);
@@ -153,7 +154,7 @@ export function useVoiceRecording({
       // Start recording
       recorder.start();
     } catch (error: any) {
-      console.error("Error starting voice recording:", error);
+      logger.error("Error starting voice recording:", error);
       setIsRecording(false);
 
       let errorMessage = `Error: ${error.message}`;

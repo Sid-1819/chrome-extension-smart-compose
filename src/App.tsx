@@ -3,6 +3,7 @@ import "./App.css";
 
 // Hooks
 import { useGeminiClient, useChromeStorage, useVoiceRecording } from "@/hooks";
+import { logger } from "@/utils/logger";
 
 // Components
 import { Header, Footer, StatusCard, ModelStatusIndicator } from "@/components/layout";
@@ -161,7 +162,7 @@ function App() {
       chrome.storage.onChanged.addListener(handleStorageChange);
       return () => chrome.storage.onChanged.removeListener(handleStorageChange);
     } catch (error) {
-      console.log("Not running in extension context:", error);
+      logger.debug("Not running in extension context:", error);
     }
   }, []);
 
