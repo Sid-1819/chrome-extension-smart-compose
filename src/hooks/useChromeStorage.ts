@@ -7,6 +7,7 @@ interface UseChromeStorageReturn {
   checkContextMenuAction: () => Promise<ContextMenuData | null>;
   clearContextMenuAction: () => Promise<void>;
   clearBadge: () => Promise<void>;
+  clearAllState: () => Promise<void>;
 }
 
 export function useChromeStorage(): UseChromeStorageReturn {
@@ -80,12 +81,22 @@ export function useChromeStorage(): UseChromeStorageReturn {
     }
   }, []);
 
+  const clearAllState = useCallback(async () => {
+    try {
+      await chrome.storage.local.remove(["persistedState"]);
+      console.log("All persisted state cleared");
+    } catch (error) {
+      console.log("Not running in extension context or error:", error);
+    }
+  }, []);
+
   return {
     persistState,
     restoreState,
     checkContextMenuAction,
     clearContextMenuAction,
     clearBadge,
+    clearAllState,
   };
 }
 

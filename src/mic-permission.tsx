@@ -57,7 +57,7 @@ function MicPermission() {
         </div>
         
         <h1 className="text-2xl font-bold text-gray-800 mb-2">
-          InterviewCoach.AI
+          InterviewCoach AI
         </h1>
         
         <p className="text-gray-600 mb-4">

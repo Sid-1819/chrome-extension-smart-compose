@@ -1,7 +1,7 @@
 export function Footer() {
   return (
     <div className="mt-8 text-center text-muted-foreground text-sm">
-      <p>&copy; 2025 InterviewCoach.AI. All rights reserved.</p>
+      <p>&copy; 2025 InterviewCoach AI. All rights reserved.</p>
       <p>
         Built with ❤️ by{" "}
         <a

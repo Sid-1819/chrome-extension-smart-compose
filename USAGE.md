@@ -1,7 +1,7 @@
-# InterviewCoach.AI - Usage Guide
+# InterviewCoach AI - Usage Guide
 
 ## Overview
-InterviewCoach.AI is a Chrome extension that provides AI-powered feedback and text assistance using **Chrome's built-in Prompt API with Gemini Nano** - an on-device AI model.
+InterviewCoach AI is a Chrome extension that provides AI-powered feedback and text assistance using **Chrome's built-in Prompt API with Gemini Nano** - an on-device AI model.
 
 ## ✨ Features
 

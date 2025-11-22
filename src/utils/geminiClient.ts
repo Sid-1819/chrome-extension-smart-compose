@@ -1,5 +1,5 @@
 /**
- * Prompt API Client for InterviewCoach.AI
+ * Prompt API Client for InterviewCoach AI
  * Uses Chrome's built-in Gemini Nano model (on-device AI)
  */
 

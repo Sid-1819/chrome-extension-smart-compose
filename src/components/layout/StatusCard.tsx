@@ -1,14 +1,26 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { AvailabilityStatus } from "@/types";
 
 interface StatusCardProps {
   status: string;
   availability: AvailabilityStatus;
   onRefresh: () => void;
+  onClearAllData?: () => void;
 }
 
-export function StatusCard({ status, availability, onRefresh }: StatusCardProps) {
+export function StatusCard({ status, availability, onRefresh, onClearAllData }: StatusCardProps) {
 
   return (
     <Card
@@ -23,9 +35,62 @@ export function StatusCard({ status, availability, onRefresh }: StatusCardProps)
       <CardContent>
         <div className="flex items-center justify-between">
           <p className="font-medium text-foreground">{status}</p>
-          <Button variant="outline" size="sm" onClick={onRefresh}>
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            {onClearAllData && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-muted-foreground hover:text-destructive hover:border-destructive"
+                    title="Clear all data"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-1"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      <line x1="10" x2="10" y1="11" y2="17" />
+                      <line x1="14" x2="14" y1="11" y2="17" />
+                    </svg>
+                    Clear
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clear all data?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete all your saved data including job
+                      descriptions, analysis results, interview questions, resume
+                      text, and cover letters. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={onClearAllData}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Clear All Data
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            <Button variant="outline" size="sm" onClick={onRefresh}>
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {availability === "unavailable" && (

@@ -33,7 +33,7 @@ function App() {
   } = useGeminiClient();
 
   // Chrome storage hook
-  const { persistState, restoreState, checkContextMenuAction, clearContextMenuAction, clearBadge } =
+  const { persistState, restoreState, checkContextMenuAction, clearContextMenuAction, clearBadge, clearAllState } =
     useChromeStorage();
 
   // Tab state
@@ -474,6 +474,26 @@ function App() {
     }
   };
 
+  const handleClearAllData = async () => {
+    // Clear all state
+    setJobDescription("");
+    setJdAnalysisResult("");
+    setInterviewQuestions("");
+    setResumeText("");
+    setResumeFilename(null);
+    setCoverLetterResult("");
+    setQuestionsList([]);
+    setCurrentQuestionIndex(-1);
+    setCustomQuestion("");
+    setMockQuestion("");
+    setMockAnswer("");
+    setMockFeedback("");
+
+    // Clear from Chrome storage
+    await clearAllState();
+    setStatus("All data cleared!");
+  };
+
   const handleSelectQuestion = (index: number) => {
     setCurrentQuestionIndex(index);
     setMockQuestion(questionsList[index]);
@@ -551,6 +571,7 @@ function App() {
           status={status}
           availability={availability}
           onRefresh={checkAvailability}
+          onClearAllData={handleClearAllData}
         />
 
         <Card className="shadow-lg">

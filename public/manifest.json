@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "InterviewCoach.AI",
+  "name": "InterviewCoach AI",
   "version": "1.0.0",
   "description": "AI-powered interview preparation assistant with job description analysis and question generation",
   "permissions": ["storage", "contextMenus", "sidePanel", "scripting", "activeTab"],

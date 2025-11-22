@@ -1,4 +1,4 @@
-# InterviewCoach.AI - Chrome Extension
+# InterviewCoach AI - Chrome Extension
 
 > AI-powered interview preparation assistant using Chrome's built-in Gemini Nano (on-device AI)
 
@@ -73,7 +73,7 @@ pnpm run build
 ### Method 2: Context Menu (Quick Access)
 
 1. **Select any job description text** on any webpage
-2. **Right-click** and choose from the InterviewCoach.AI menu:
+2. **Right-click** and choose from the InterviewCoach AI menu:
    - 🔍 **Analyze Job Description** - Extracts key skills, responsibilities, and requirements
    - 💭 **Generate Interview Questions** - Creates tailored questions for the role
    - 💬 **Get Answer Feedback** - Get feedback on your interview answer
