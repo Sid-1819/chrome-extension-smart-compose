@@ -137,9 +137,11 @@ class InterviewCoachBackground {
   }
 
   /**
-   * Send nudge message to content script with retry
+   * Send nudge message to content script with retry and fallback injection
    */
   private async sendNudgeMessage(tabId: number, message: MessagePayload, retries = 3): Promise<void> {
+    let scriptInjected = false;
+
     for (let i = 0; i < retries; i++) {
       try {
         // First check if content script is ready
@@ -154,9 +156,27 @@ class InterviewCoachBackground {
       } catch (error) {
         console.log(`InterviewCoach.AI: Content script not ready, attempt ${i + 1}/${retries}`);
 
+        // On first failure, try to inject content script programmatically (only once)
+        if (i === 0 && !scriptInjected) {
+          try {
+            // Check if we can inject (some pages like chrome:// don't allow it)
+            const tab = await chrome.tabs.get(tabId);
+            if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+              await chrome.scripting.executeScript({
+                target: { tabId },
+                files: ['content.js']
+              });
+              scriptInjected = true;
+              console.log('InterviewCoach.AI: Content script injected programmatically');
+            }
+          } catch (injectError) {
+            console.log('InterviewCoach.AI: Could not inject content script:', injectError);
+          }
+        }
+
         if (i < retries - 1) {
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Wait before retrying (longer wait after injection to let script initialize)
+          await new Promise(resolve => setTimeout(resolve, scriptInjected ? 800 : 300));
         } else {
           console.log('InterviewCoach.AI: Could not connect to content script after retries');
         }
@@ -206,9 +226,18 @@ class InterviewCoachBackground {
    */
   private async clearBadge(sender: chrome.runtime.MessageSender): Promise<void> {
     try {
+      // Get tab ID - either from sender (if content script) or from active tab (if side panel)
+      let tabId = sender.tab?.id;
+
+      if (!tabId) {
+        // If called from side panel, get the active tab
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        tabId = activeTab?.id;
+      }
+
       // Send message to content script to hide nudge badge
-      if (sender.tab?.id) {
-        await chrome.tabs.sendMessage(sender.tab.id, {
+      if (tabId) {
+        await chrome.tabs.sendMessage(tabId, {
           type: 'HIDE_NUDGE'
         });
       }

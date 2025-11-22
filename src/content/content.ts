@@ -304,8 +304,9 @@ class NudgeBadge {
     // Check if nudge already exists
     const existing = document.getElementById('interview-coach-nudge');
     if (existing) {
-      this.nudge = existing;
-      return;
+      // Remove old element and recreate to ensure fresh click handlers
+      existing.remove();
+      console.log('InterviewCoach.AI: Removed old nudge badge, creating fresh one');
     }
 
     // Create nudge container
@@ -454,16 +455,26 @@ class NudgeBadge {
   private async handleClick(): Promise<void> {
     console.log('InterviewCoach.AI: Nudge badge clicked');
 
+    // Hide nudge first
+    this.hide();
+
     // Send message to background to open Chrome side panel
     try {
-      await chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' });
-      console.log('InterviewCoach.AI: Side panel open request sent');
-    } catch (error) {
-      console.error('InterviewCoach.AI: Error opening side panel:', error);
+      // Check if extension context is still valid
+      if (chrome.runtime?.id) {
+        await chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' });
+        console.log('InterviewCoach.AI: Side panel open request sent');
+      } else {
+        console.log('InterviewCoach.AI: Extension context invalid, user should click extension icon');
+      }
+    } catch (error: any) {
+      // If context is invalidated, just log it - the user can click the extension icon
+      if (error.message?.includes('Extension context invalidated')) {
+        console.log('InterviewCoach.AI: Extension context invalidated, please click extension icon');
+      } else {
+        console.error('InterviewCoach.AI: Error opening side panel:', error);
+      }
     }
-
-    // Hide nudge
-    this.hide();
   }
 
   public isShowing(): boolean {

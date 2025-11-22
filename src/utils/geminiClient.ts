@@ -15,6 +15,7 @@ export interface PromptAPIConfig {
   topK?: number;
   systemPrompt?: string;
   onDownloadProgress?: (progress: number) => void;
+  onModelLoading?: () => void; // Called when download is complete but model is loading into memory
   expectedInputs?: Array<{ type: 'text' | 'image' | 'audio'; languages?: string[] }>;
   expectedOutputs?: Array<{ type: 'text'; languages?: string[] }>;
 }
@@ -95,23 +96,35 @@ export class GeminiClient {
           if (this.config.onDownloadProgress) {
             this.config.onDownloadProgress(progress);
           }
+          // When download completes (progress reaches 100), signal that model is loading into memory
+          if (e.loaded === 1 && this.config.onModelLoading) {
+            console.log('📦 [SESSION] Download complete, loading model into memory...');
+            this.config.onModelLoading();
+          }
         });
       }
     };
 
-    // Add audio input support if requested
+    // Always specify expected outputs with language for optimal quality and safety
+    sessionConfig.expectedOutputs = this.config.expectedOutputs || [
+      { type: 'text', languages: ['en'] }
+    ];
+
+    // Add input modality support if requested
     if (options?.enableAudioInput || this.config.expectedInputs) {
       sessionConfig.expectedInputs = this.config.expectedInputs || [
         { type: 'text', languages: ['en'] },
         { type: 'audio', languages: ['en'] }
       ];
-      sessionConfig.expectedOutputs = this.config.expectedOutputs || [
-        { type: 'text', languages: ['en'] }
-      ];
-      console.log('🔧 [SESSION] Configuring session with audio input support:', {
+      console.log('🔧 [SESSION] Configuring session with multimodal input support:', {
         expectedInputs: sessionConfig.expectedInputs,
         expectedOutputs: sessionConfig.expectedOutputs
       });
+    } else {
+      // Default to text input when no specific inputs requested
+      sessionConfig.expectedInputs = [
+        { type: 'text', languages: ['en'] }
+      ];
     }
 
     // Create session with monitoring for downloads
@@ -621,6 +634,7 @@ Email draft:`;
       const params = await (window as any).LanguageModel.params();
       const session = await (window as any).LanguageModel.create({
         expectedInputs: [{ type: 'audio' }],
+        expectedOutputs: [{ type: 'text', languages: ['en'] }],
         temperature: 0.1,
         topK: params.defaultTopK,
       });
@@ -692,6 +706,7 @@ Email draft:`;
       const params = await (window as any).LanguageModel.params();
       session = await (window as any).LanguageModel.create({
         expectedInputs: [{ type: 'audio' }],
+        expectedOutputs: [{ type: 'text', languages: ['en'] }],
         temperature: 0.1,
         topK: params.defaultTopK,
       });
@@ -764,6 +779,7 @@ Email draft:`;
       const params = await (window as any).LanguageModel.params();
       const session = await (window as any).LanguageModel.create({
         expectedInputs: [{ type: 'image' }],
+        expectedOutputs: [{ type: 'text', languages: ['en'] }],
         temperature: 0.1,
         topK: params.defaultTopK,
       });

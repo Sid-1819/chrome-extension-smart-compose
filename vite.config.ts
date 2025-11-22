@@ -9,6 +9,11 @@ export default defineConfig({
     tailwindcss(),
     react()
   ],
+  resolve: {
+    alias: {
+      "@": resolve(__dirname, "./src"),
+    },
+  },
   build: {
     rollupOptions: {
       input: {

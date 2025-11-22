@@ -2,6 +2,9 @@ export const LOADING_MESSAGES = {
   // API Availability
   CHECKING_API: 'Checking AI availability...',
   DOWNLOADING_MODEL: 'Downloading Gemini Nano model...',
+  DOWNLOADING_MODEL_SUB: 'This is a one-time download. Your data stays on-device.',
+  LOADING_MODEL: 'Loading model into memory...',
+  LOADING_MODEL_SUB: 'Almost ready! The model is being prepared for use.',
   INITIALIZING_CLIENT: 'Initializing AI client...',
 
   // Job Description Analysis
