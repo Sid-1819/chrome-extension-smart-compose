@@ -71,7 +71,7 @@ For a production extension, you should add a settings page. Here's a simple exam
 <!DOCTYPE html>
 <html>
 <head>
-  <title>InterviewCoach.AI Settings</title>
+  <title>InterviewCoach AI Settings</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

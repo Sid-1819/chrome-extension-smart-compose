@@ -1,5 +1,5 @@
 /**
- * InterviewCoach.AI Background Script
+ * InterviewCoach AI Background Script
  * Handles storage, context menus, and coordination (AI operations are handled in the popup)
  */
 
@@ -28,7 +28,7 @@ class InterviewCoachBackground {
   }
 
   private async init(): Promise<void> {
-    console.log('InterviewCoach.AI: Background script initialized');
+    console.log('InterviewCoach AI: Background script initialized');
     this.setupMessageListener();
     this.setupContextMenus();
     this.setupActionButton();
@@ -42,7 +42,7 @@ class InterviewCoachBackground {
     // Set panel to open automatically when action icon is clicked
     chrome.sidePanel
       .setPanelBehavior({ openPanelOnActionClick: true })
-      .catch((error) => console.error('InterviewCoach.AI: Error setting panel behavior:', error));
+      .catch((error) => console.error('InterviewCoach AI: Error setting panel behavior:', error));
   }
 
   /**
@@ -54,7 +54,7 @@ class InterviewCoachBackground {
       // Create parent menu
       chrome.contextMenus.create({
         id: 'interview-coach-parent',
-        title: 'InterviewCoach.AI',
+        title: 'InterviewCoach AI',
         contexts: ['selection']
       });
 
@@ -83,14 +83,14 @@ class InterviewCoachBackground {
       });
 
 
-      console.log('InterviewCoach.AI: Context menus created');
+      console.log('InterviewCoach AI: Context menus created');
     });
 
     // Handle context menu clicks
     chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       if (!info.selectionText || !tab?.id) return;
 
-      console.log('InterviewCoach.AI: Context menu action:', info.menuItemId);
+      console.log('InterviewCoach AI: Context menu action:', info.menuItemId);
 
       // Store the selected text and action for the popup to access
       await chrome.storage.local.set({
@@ -103,16 +103,16 @@ class InterviewCoachBackground {
       if (tab?.windowId) {
         try {
           await chrome.sidePanel.open({ windowId: tab.windowId });
-          console.log('InterviewCoach.AI: Side panel opened');
+          console.log('InterviewCoach AI: Side panel opened');
         } catch (error) {
-          console.log('InterviewCoach.AI: Could not open side panel:', error);
+          console.log('InterviewCoach AI: Could not open side panel:', error);
         }
       }
 
       // Then send nudge message (async, happens after side panel is already opening)
       if (tab?.id) {
         let badgeText = 'Ready';
-        let badgeTitle = 'InterviewCoach.AI - Click to view';
+        let badgeTitle = 'InterviewCoach AI - Click to view';
 
         switch (info.menuItemId) {
           case 'analyze-job-description':
@@ -137,9 +137,11 @@ class InterviewCoachBackground {
   }
 
   /**
-   * Send nudge message to content script with retry
+   * Send nudge message to content script with retry and fallback injection
    */
   private async sendNudgeMessage(tabId: number, message: MessagePayload, retries = 3): Promise<void> {
+    let scriptInjected = false;
+
     for (let i = 0; i < retries; i++) {
       try {
         // First check if content script is ready
@@ -148,17 +150,35 @@ class InterviewCoachBackground {
         if (response && response.status === 'ready') {
           // Content script is ready, send the nudge message
           await chrome.tabs.sendMessage(tabId, message);
-          console.log('InterviewCoach.AI: Nudge badge message sent');
+          console.log('InterviewCoach AI: Nudge badge message sent');
           return;
         }
       } catch (error) {
-        console.log(`InterviewCoach.AI: Content script not ready, attempt ${i + 1}/${retries}`);
+        console.log(`InterviewCoach AI: Content script not ready, attempt ${i + 1}/${retries}`);
+
+        // On first failure, try to inject content script programmatically (only once)
+        if (i === 0 && !scriptInjected) {
+          try {
+            // Check if we can inject (some pages like chrome:// don't allow it)
+            const tab = await chrome.tabs.get(tabId);
+            if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+              await chrome.scripting.executeScript({
+                target: { tabId },
+                files: ['content.js']
+              });
+              scriptInjected = true;
+              console.log('InterviewCoach AI: Content script injected programmatically');
+            }
+          } catch (injectError) {
+            console.log('InterviewCoach AI: Could not inject content script:', injectError);
+          }
+        }
 
         if (i < retries - 1) {
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Wait before retrying (longer wait after injection to let script initialize)
+          await new Promise(resolve => setTimeout(resolve, scriptInjected ? 800 : 300));
         } else {
-          console.log('InterviewCoach.AI: Could not connect to content script after retries');
+          console.log('InterviewCoach AI: Could not connect to content script after retries');
         }
       }
     }
@@ -174,7 +194,7 @@ class InterviewCoachBackground {
         sender: chrome.runtime.MessageSender,
         sendResponse: (response?: any) => void
       ) => {
-        console.log('InterviewCoach.AI: Received message:', message.type, sender.tab?.url);
+        console.log('InterviewCoach AI: Received message:', message.type, sender.tab?.url);
 
         switch (message.type) {
           case 'TEXT_CAPTURED':
@@ -206,15 +226,24 @@ class InterviewCoachBackground {
    */
   private async clearBadge(sender: chrome.runtime.MessageSender): Promise<void> {
     try {
+      // Get tab ID - either from sender (if content script) or from active tab (if side panel)
+      let tabId = sender.tab?.id;
+
+      if (!tabId) {
+        // If called from side panel, get the active tab
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        tabId = activeTab?.id;
+      }
+
       // Send message to content script to hide nudge badge
-      if (sender.tab?.id) {
-        await chrome.tabs.sendMessage(sender.tab.id, {
+      if (tabId) {
+        await chrome.tabs.sendMessage(tabId, {
           type: 'HIDE_NUDGE'
         });
       }
-      console.log('InterviewCoach.AI: Nudge cleared');
+      console.log('InterviewCoach AI: Nudge cleared');
     } catch (error) {
-      console.error('InterviewCoach.AI: Error clearing nudge:', error);
+      console.error('InterviewCoach AI: Error clearing nudge:', error);
     }
   }
 
@@ -230,19 +259,19 @@ class InterviewCoachBackground {
       if (tab.windowId) {
         try {
           await chrome.sidePanel.open({ windowId: tab.windowId });
-          console.log('InterviewCoach.AI: Side panel opened with windowId');
+          console.log('InterviewCoach AI: Side panel opened with windowId');
         } catch (error) {
-          console.log('InterviewCoach.AI: Could not open side panel with windowId, trying tabId:', error);
+          console.log('InterviewCoach AI: Could not open side panel with windowId, trying tabId:', error);
 
           // Fallback to tabId
           if (tab.id) {
             await chrome.sidePanel.open({ tabId: tab.id });
-            console.log('InterviewCoach.AI: Side panel opened with tabId');
+            console.log('InterviewCoach AI: Side panel opened with tabId');
           }
         }
       }
     } catch (error) {
-      console.error('InterviewCoach.AI: Error opening side panel:', error);
+      console.error('InterviewCoach AI: Error opening side panel:', error);
     }
   }
 
@@ -267,7 +296,7 @@ class InterviewCoachBackground {
     // Save to storage
     this.saveTextsToStorage();
 
-    console.log('InterviewCoach.AI: Text captured and stored', {
+    console.log('InterviewCoach AI: Text captured and stored', {
       textLength: message.text?.length || 0,
       url: message.url,
       totalStored: this.recentTexts.length
@@ -283,7 +312,7 @@ class InterviewCoachBackground {
         recentTexts: this.recentTexts
       });
     } catch (error) {
-      console.error('InterviewCoach.AI: Error saving to storage:', error);
+      console.error('InterviewCoach AI: Error saving to storage:', error);
     }
   }
 
@@ -295,10 +324,10 @@ class InterviewCoachBackground {
       const result = await chrome.storage.local.get(['recentTexts']);
       if (result.recentTexts) {
         this.recentTexts = result.recentTexts;
-        console.log('InterviewCoach.AI: Loaded', this.recentTexts.length, 'stored texts');
+        console.log('InterviewCoach AI: Loaded', this.recentTexts.length, 'stored texts');
       }
     } catch (error) {
-      console.error('InterviewCoach.AI: Error loading from storage:', error);
+      console.error('InterviewCoach AI: Error loading from storage:', error);
     }
   }
 

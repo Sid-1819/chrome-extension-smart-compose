@@ -1,6 +1,6 @@
 # Prompt API Setup Guide
 
-InterviewCoach.AI now uses Chrome's **Prompt API with Gemini Nano** - an on-device AI model that runs locally in your browser!
+InterviewCoach AI now uses Chrome's **Prompt API with Gemini Nano** - an on-device AI model that runs locally in your browser!
 
 ## 🎉 Benefits
 
