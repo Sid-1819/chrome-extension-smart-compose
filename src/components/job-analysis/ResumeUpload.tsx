@@ -75,7 +75,7 @@ export function ResumeUpload({
     fileInputRef.current?.click();
   };
 
-  const hasResume = resumeText?.trim().length > 0;
+  const hasResume = typeof resumeText === 'string' && resumeText.trim().length > 0;
 
   return (
     <Card className="mt-6 relative overflow-hidden">
@@ -106,7 +106,7 @@ export function ResumeUpload({
           </CardTitle>
           {hasResume && (
             <Badge variant="secondary" className="text-xs">
-              {resumeText.length.toLocaleString()} characters
+              {(resumeText?.length || 0).toLocaleString()} characters
             </Badge>
           )}
         </div>
@@ -268,7 +268,7 @@ Include your:
             </div>
             <p className="text-sm text-muted-foreground line-clamp-3">
               {resumeText?.substring(0, 300)}
-              {resumeText?.length > 300 && "..."}
+              {(resumeText?.length || 0) > 300 && "..."}
             </p>
           </div>
         )}

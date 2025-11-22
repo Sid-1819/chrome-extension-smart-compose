@@ -104,7 +104,7 @@ export function MockInterview({
           disabled={disabled || isRecording}
         />
         <p className="text-sm text-muted-foreground mt-1">
-          {mockAnswer.length} characters
+          {mockAnswer?.length || 0} characters
         </p>
       </div>
 
@@ -170,8 +170,8 @@ export function MockInterview({
           mockLoading.isLoading ||
           disabled ||
           isRecording ||
-          !mockQuestion?.trim() ||
-          !mockAnswer?.trim()
+          !(typeof mockQuestion === 'string' && mockQuestion.trim()) ||
+          !(typeof mockAnswer === 'string' && mockAnswer.trim())
         }
         className="w-full"
         size="lg"

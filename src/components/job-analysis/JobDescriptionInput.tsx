@@ -32,7 +32,7 @@ export function JobDescriptionInput({
           disabled={disabled}
         />
         <p className="text-sm text-muted-foreground mt-1">
-          {value.length} characters
+          {value?.length || 0} characters
         </p>
       </div>
 

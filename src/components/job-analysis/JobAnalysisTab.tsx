@@ -66,7 +66,7 @@ export function JobAnalysisTab({
         coverLetterLoading={coverLetterLoading}
         coverLetterResult={coverLetterResult}
         copySuccess={copySuccess}
-        disabled={disabled || !jobDescription?.trim()}
+        disabled={disabled || !(typeof jobDescription === 'string' && jobDescription.trim())}
         onFileChange={onResumeFileChange}
         onTextChange={onResumeTextChange}
         onClear={onClearResume}

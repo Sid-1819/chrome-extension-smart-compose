@@ -37,7 +37,7 @@ export function QuestionGenerator({
             disabled={disabled}
           />
           <p className="text-sm text-muted-foreground mt-1 mb-3">
-            {jobDescription.length} characters
+            {jobDescription?.length || 0} characters
           </p>
         </div>
 

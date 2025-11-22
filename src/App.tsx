@@ -5,7 +5,7 @@ import "./App.css";
 import { useGeminiClient, useChromeStorage, useVoiceRecording } from "@/hooks";
 
 // Components
-import { Header, Footer, StatusCard } from "@/components/layout";
+import { Header, Footer, StatusCard, ModelStatusIndicator } from "@/components/layout";
 import { DownloadProgress } from "@/components/shared";
 import { JobAnalysisTab } from "@/components/job-analysis";
 import { InterviewPracticeTab } from "@/components/interview-practice";
@@ -99,12 +99,19 @@ function App() {
     const init = async () => {
       const state = await restoreState();
       if (state) {
-        if (state.jobDescription) setJobDescription(state.jobDescription);
-        if (state.jdAnalysisResult) setJdAnalysisResult(state.jdAnalysisResult);
-        if (state.interviewQuestions) setInterviewQuestions(state.interviewQuestions);
-        if (state.resumeText) setResumeText(state.resumeText);
-        if (state.resumeFilename) setResumeFilename(state.resumeFilename);
-        if (state.coverLetterResult) setCoverLetterResult(state.coverLetterResult);
+        // Ensure all restored values are strings
+        if (state.jobDescription && typeof state.jobDescription === 'string')
+          setJobDescription(state.jobDescription);
+        if (state.jdAnalysisResult && typeof state.jdAnalysisResult === 'string')
+          setJdAnalysisResult(state.jdAnalysisResult);
+        if (state.interviewQuestions && typeof state.interviewQuestions === 'string')
+          setInterviewQuestions(state.interviewQuestions);
+        if (state.resumeText && typeof state.resumeText === 'string')
+          setResumeText(state.resumeText);
+        if (state.resumeFilename && typeof state.resumeFilename === 'string')
+          setResumeFilename(state.resumeFilename);
+        if (state.coverLetterResult && typeof state.coverLetterResult === 'string')
+          setCoverLetterResult(state.coverLetterResult);
         if (state.activeTab) setActiveTab(state.activeTab);
       }
 
@@ -181,33 +188,48 @@ function App() {
     }
   }, [interviewQuestions]);
 
-  // Clear analysis when JD changes
-  useEffect(() => {
-    if (jdAnalysisResult || coverLetterResult || resumeText) {
-      setJdAnalysisResult("");
-      setCoverLetterResult("");
-      setResumeText("");
-      setResumeFilename(null);
-    }
-  }, [jobDescription]);
 
   // === Handlers ===
 
   const parseQuestions = (text: string): string[] => {
     const lines = text.split("\n").filter((line) => line.trim());
     const questions: string[] = [];
+
+    // Patterns to identify section headers (not actual questions)
     const headingPatterns = [
-      /^#+\s*/i,
-      /^(behavioral|technical|situational|problem-solving|coding|system design)\s+(questions?|interview)/i,
-      /\(STAR\s+Method\)/i,
-      /questions?\s*:?\s*$/i,
-      /^questions?\s*$/i,
+      /^#+\s*/i,                                    // Markdown headers: # ## ###
+      /^\*\*.*\*\*\s*$/,                            // Bold-only lines: **Something**
+      /^(behavioral|technical|situational|problem-solving|coding|system design)/i,
+      /\(STAR\s+(Method|Format)\)/i,               // (STAR Method) or (STAR Format)
+      /questions?\s*:?\s*$/i,                       // Ends with "questions" or "questions:"
+      /^questions?\s*$/i,                           // Just "questions"
+      /^(section|part|category)\s*\d*/i,           // Section 1, Part 2, etc.
     ];
 
     for (const line of lines) {
-      const cleaned = line.replace(/^\d+\.\s*/, "").trim();
+      // Remove markdown formatting, numbering, and trim
+      let cleaned = line
+        .replace(/^\d+\.\s*/, "")      // Remove "1. ", "2. " etc.
+        .replace(/^\*\*|\*\*$/g, "")   // Remove ** at start/end
+        .replace(/^\*|\*$/g, "")       // Remove * at start/end
+        .replace(/^#+\s*/, "")         // Remove # headers
+        .trim();
+
+      // Skip empty or very short lines
       if (cleaned.length <= 10) continue;
+
+      // Skip lines that match heading patterns
       if (headingPatterns.some((p) => p.test(cleaned))) continue;
+
+      // Skip lines that don't look like questions (no verb or question mark, and are short)
+      // But keep longer lines that might be scenario descriptions
+      const looksLikeHeading =
+        cleaned.length < 50 &&
+        !cleaned.includes("?") &&
+        !/^(describe|tell|explain|how|what|why|when|where|provide|give|share|walk|imagine|a client|you need|you are)/i.test(cleaned);
+
+      if (looksLikeHeading) continue;
+
       questions.push(cleaned);
     }
     return questions.length > 0 ? questions : [text];
@@ -511,6 +533,12 @@ function App() {
     <div className={`${isInSidebar ? "min-h-full" : "min-h-screen"} bg-background p-6`}>
       <div className={isInSidebar ? "max-w-full" : "max-w-4xl mx-auto"}>
         <Header />
+
+        <ModelStatusIndicator
+          availability={availability}
+          downloadProgress={downloadProgress}
+          isModelLoading={isModelLoading}
+        />
 
         {(availability === "downloading" || downloadProgress !== null || isModelLoading) && (
           <DownloadProgress
