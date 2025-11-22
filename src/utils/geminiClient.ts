@@ -3,6 +3,8 @@
  * Uses Chrome's built-in Gemini Nano model (on-device AI)
  */
 
+import { logger } from './logger';
+
 // Extend Window interface to include LanguageModel
 declare global {
   interface Window {
@@ -92,13 +94,13 @@ export class GeminiClient {
       monitor: (m: any) => {
         m.addEventListener('downloadprogress', (e: any) => {
           const progress = e.loaded * 100;
-          console.log(`Gemini Nano downloading: ${progress.toFixed(1)}%`);
+          logger.debug(`Gemini Nano downloading: ${progress.toFixed(1)}%`);
           if (this.config.onDownloadProgress) {
             this.config.onDownloadProgress(progress);
           }
           // When download completes (progress reaches 100), signal that model is loading into memory
           if (e.loaded === 1 && this.config.onModelLoading) {
-            console.log('📦 [SESSION] Download complete, loading model into memory...');
+            logger.debug('📦 [SESSION] Download complete, loading model into memory...');
             this.config.onModelLoading();
           }
         });
@@ -116,7 +118,7 @@ export class GeminiClient {
         { type: 'text', languages: ['en'] },
         { type: 'audio', languages: ['en'] }
       ];
-      console.log('🔧 [SESSION] Configuring session with multimodal input support:', {
+      logger.debug('🔧 [SESSION] Configuring session with multimodal input support:', {
         expectedInputs: sessionConfig.expectedInputs,
         expectedOutputs: sessionConfig.expectedOutputs
       });
@@ -128,7 +130,7 @@ export class GeminiClient {
     }
 
     // Create session with monitoring for downloads
-    console.log('🔧 [SESSION] Creating Prompt API session with config:', {
+    logger.debug('🔧 [SESSION] Creating Prompt API session with config:', {
       temperature: sessionConfig.temperature,
       topK: sessionConfig.topK,
       hasInitialPrompts: !!sessionConfig.initialPrompts,
@@ -141,7 +143,7 @@ export class GeminiClient {
     // Store initial prompts in conversation history
     this.conversationHistory = [...initialPrompts];
 
-    console.log('🔧 [SESSION] ✅ Prompt API session initialized successfully', {
+    logger.debug('🔧 [SESSION] ✅ Prompt API session initialized successfully', {
       temperature: this.config.temperature || params.defaultTemperature,
       topK: this.config.topK || params.defaultTopK,
       audioInputEnabled: !!sessionConfig.expectedInputs,
@@ -614,8 +616,8 @@ Email draft:`;
    * Follows the official Google Prompt API pattern exactly
    */
   async transcribeAudio(audioBlob: Blob): Promise<string> {
-    console.log('🎙️ [TRANSCRIBE] Starting audio transcription...');
-    console.log('🎙️ [TRANSCRIBE] Audio blob details:', {
+    logger.debug('🎙️ [TRANSCRIBE] Starting audio transcription...');
+    logger.debug('🎙️ [TRANSCRIBE] Audio blob details:', {
       size: audioBlob.size,
       type: audioBlob.type,
       sizeInKB: (audioBlob.size / 1024).toFixed(2)
@@ -624,7 +626,7 @@ Email draft:`;
     try {
       // Convert Blob to ArrayBuffer
       const arrayBuffer = await audioBlob.arrayBuffer();
-      console.log('🎙️ [TRANSCRIBE] ArrayBuffer created:', {
+      logger.debug('🎙️ [TRANSCRIBE] ArrayBuffer created:', {
         byteLength: arrayBuffer.byteLength,
         sizeInKB: (arrayBuffer.byteLength / 1024).toFixed(2)
       });
@@ -639,7 +641,7 @@ Email draft:`;
         topK: params.defaultTopK,
       });
 
-      console.log('🎙️ [TRANSCRIBE] Audio session created, calling promptStreaming...');
+      logger.debug('🎙️ [TRANSCRIBE] Audio session created, calling promptStreaming...');
 
       // Use promptStreaming with the exact pattern from Google's example
       const stream = session.promptStreaming([
@@ -655,12 +657,12 @@ Email draft:`;
       // Collect all chunks
       let result = '';
       for await (const chunk of stream) {
-        console.log(chunk);
+        logger.debug(chunk);
         result += chunk;
       }
 
-      console.log('🎙️ [TRANSCRIBE] ✅ Transcription successful!');
-      console.log('🎙️ [TRANSCRIBE] Result:', {
+      logger.debug('🎙️ [TRANSCRIBE] ✅ Transcription successful!');
+      logger.debug('🎙️ [TRANSCRIBE] Result:', {
         length: result.length,
         preview: result.substring(0, 200)
       });
@@ -670,7 +672,7 @@ Email draft:`;
 
       return result;
     } catch (error: any) {
-      console.error('🎙️ [TRANSCRIBE] ❌ Audio transcription failed:', {
+      logger.error('🎙️ [TRANSCRIBE] ❌ Audio transcription failed:', {
         name: error.name,
         message: error.message,
         stack: error.stack,
@@ -686,8 +688,8 @@ Email draft:`;
    * Follows the official Google Prompt API pattern
    */
   async *transcribeAudioStreaming(audioBlob: Blob): AsyncGenerator<string> {
-    console.log('🎙️ [TRANSCRIBE-STREAM] Starting streaming audio transcription...');
-    console.log('🎙️ [TRANSCRIBE-STREAM] Audio blob details:', {
+    logger.debug('🎙️ [TRANSCRIBE-STREAM] Starting streaming audio transcription...');
+    logger.debug('🎙️ [TRANSCRIBE-STREAM] Audio blob details:', {
       size: audioBlob.size,
       type: audioBlob.type,
       sizeInKB: (audioBlob.size / 1024).toFixed(2)
@@ -697,7 +699,7 @@ Email draft:`;
     try {
       // Convert Blob to ArrayBuffer
       const arrayBuffer = await audioBlob.arrayBuffer();
-      console.log('🎙️ [TRANSCRIBE-STREAM] ArrayBuffer created:', {
+      logger.debug('🎙️ [TRANSCRIBE-STREAM] ArrayBuffer created:', {
         byteLength: arrayBuffer.byteLength,
         sizeInKB: (arrayBuffer.byteLength / 1024).toFixed(2)
       });
@@ -711,7 +713,7 @@ Email draft:`;
         topK: params.defaultTopK,
       });
 
-      console.log('🎙️ [TRANSCRIBE-STREAM] Audio session created, calling promptStreaming...');
+      logger.debug('🎙️ [TRANSCRIBE-STREAM] Audio session created, calling promptStreaming...');
 
       // Use promptStreaming with the exact pattern from Google's example
       const stream = session.promptStreaming([
@@ -727,7 +729,7 @@ Email draft:`;
       let chunkCount = 0;
       for await (const chunk of stream) {
         chunkCount++;
-        console.log('🎙️ [TRANSCRIBE-STREAM] Received chunk:', {
+        logger.debug('🎙️ [TRANSCRIBE-STREAM] Received chunk:', {
           chunkNumber: chunkCount,
           length: chunk.length,
           preview: chunk.substring(0, 50)
@@ -735,11 +737,11 @@ Email draft:`;
         yield chunk;
       }
 
-      console.log('🎙️ [TRANSCRIBE-STREAM] ✅ Streaming transcription complete!', {
+      logger.debug('🎙️ [TRANSCRIBE-STREAM] ✅ Streaming transcription complete!', {
         totalChunks: chunkCount
       });
     } catch (error: any) {
-      console.error('🎙️ [TRANSCRIBE-STREAM] ❌ Audio transcription streaming failed:', {
+      logger.error('🎙️ [TRANSCRIBE-STREAM] ❌ Audio transcription streaming failed:', {
         name: error.name,
         message: error.message,
         stack: error.stack,
@@ -760,8 +762,8 @@ Email draft:`;
    * Follows the official Google Prompt API pattern
    */
   async extractTextFromImage(imageBlob: Blob): Promise<string> {
-    console.log('🖼️ [IMAGE] Starting text extraction from image...');
-    console.log('🖼️ [IMAGE] Image blob details:', {
+    logger.debug('🖼️ [IMAGE] Starting text extraction from image...');
+    logger.debug('🖼️ [IMAGE] Image blob details:', {
       size: imageBlob.size,
       type: imageBlob.type,
       sizeInKB: (imageBlob.size / 1024).toFixed(2)
@@ -770,7 +772,7 @@ Email draft:`;
     try {
       // Convert Blob to ArrayBuffer
       const arrayBuffer = await imageBlob.arrayBuffer();
-      console.log('🖼️ [IMAGE] ArrayBuffer created:', {
+      logger.debug('🖼️ [IMAGE] ArrayBuffer created:', {
         byteLength: arrayBuffer.byteLength,
         sizeInKB: (arrayBuffer.byteLength / 1024).toFixed(2)
       });
@@ -784,7 +786,7 @@ Email draft:`;
         topK: params.defaultTopK,
       });
 
-      console.log('🖼️ [IMAGE] Image session created, calling promptStreaming...');
+      logger.debug('🖼️ [IMAGE] Image session created, calling promptStreaming...');
 
       // Use promptStreaming with the exact pattern from Google's example
       const stream = session.promptStreaming([
@@ -803,12 +805,12 @@ Email draft:`;
       // Collect all chunks
       let result = '';
       for await (const chunk of stream) {
-        console.log(chunk);
+        logger.debug(chunk);
         result += chunk;
       }
 
-      console.log('🖼️ [IMAGE] ✅ Text extraction successful!');
-      console.log('🖼️ [IMAGE] Result:', {
+      logger.debug('🖼️ [IMAGE] ✅ Text extraction successful!');
+      logger.debug('🖼️ [IMAGE] Result:', {
         length: result.length,
         preview: result.substring(0, 200)
       });
@@ -818,7 +820,7 @@ Email draft:`;
 
       return result;
     } catch (error: any) {
-      console.error('🖼️ [IMAGE] ❌ Text extraction failed:', {
+      logger.error('🖼️ [IMAGE] ❌ Text extraction failed:', {
         name: error.name,
         message: error.message,
         stack: error.stack,
@@ -1037,7 +1039,7 @@ export class SummarizerClient {
       monitor: (m: any) => {
         m.addEventListener('downloadprogress', (e: any) => {
           const progress = e.loaded * 100;
-          console.log(`Summarizer downloading: ${progress.toFixed(1)}%`);
+          logger.debug(`Summarizer downloading: ${progress.toFixed(1)}%`);
           if (this.config.onDownloadProgress) {
             this.config.onDownloadProgress(progress);
           }
@@ -1045,7 +1047,7 @@ export class SummarizerClient {
       }
     });
 
-    console.log('Summarizer API session initialized', {
+    logger.debug('Summarizer API session initialized', {
       type: sessionConfig.type,
       format: sessionConfig.format,
       length: sessionConfig.length
