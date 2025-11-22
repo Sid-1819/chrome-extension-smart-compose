@@ -94,43 +94,123 @@ export function StatusCard({ status, availability, onRefresh, onClearAllData }: 
         </div>
 
         {availability === "unavailable" && (
-          <div className="mt-4 text-sm text-muted-foreground">
-            <p className="font-semibold mb-2 text-foreground">Setup Required:</p>
-
-            {/* Prompt API Setup */}
-            <div className="mb-3">
-              <p className="font-medium text-foreground mb-1">
-                For Prompt API (Interview Features):
-              </p>
-              <ol className="list-decimal ml-5 space-y-1">
-                <li>
-                  Open{" "}
-                  <code className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-xs">
-                    chrome://flags/#optimization-guide-on-device-model
-                  </code>
-                </li>
-                <li>
-                  Set to <strong>"Enabled BypassPerfRequirement"</strong>
-                </li>
-                <li>
-                  Open{" "}
-                  <code className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-xs">
-                    chrome://flags/#prompt-api-for-gemini-nano
-                  </code>
-                </li>
-                <li>
-                  Set to <strong>"Enabled"</strong>
-                </li>
-              </ol>
+          <div className="mt-4">
+            {/* Error Alert */}
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-destructive mt-0.5 flex-shrink-0"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" x2="12" y1="8" y2="12" />
+                  <line x1="12" x2="12.01" y1="16" y2="16" />
+                </svg>
+                <div>
+                  <p className="font-semibold text-destructive mb-1">
+                    Gemini Nano AI Model Not Available
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    The on-device AI model couldn't be loaded. This is required for all features to work.
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <p className="mt-2 font-semibold text-foreground">Finally:</p>
-            <ol className="list-decimal ml-5 space-y-1">
-              <li>Restart Chrome</li>
-              <li>
-                The AI model will download automatically (may take a few minutes)
-              </li>
-            </ol>
+            {/* Retry Button */}
+            <Button
+              onClick={onRefresh}
+              className="w-full mb-4"
+              variant="default"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mr-2"
+              >
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                <path d="M16 16h5v5" />
+              </svg>
+              Retry Loading AI Model
+            </Button>
+
+            {/* Setup Instructions */}
+            <details className="group">
+              <summary className="cursor-pointer text-sm font-medium text-foreground hover:text-primary transition-colors flex items-center gap-2">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="transition-transform group-open:rotate-90"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+                First time? Setup instructions
+              </summary>
+              <div className="mt-3 pl-6 text-sm text-muted-foreground space-y-3">
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-medium text-foreground mb-2">
+                    Step 1: Enable Chrome Flags
+                  </p>
+                  <ol className="list-decimal ml-4 space-y-2">
+                    <li>
+                      Open{" "}
+                      <code className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-xs">
+                        chrome://flags/#optimization-guide-on-device-model
+                      </code>
+                      <br />
+                      <span className="text-xs">Set to <strong>"Enabled BypassPerfRequirement"</strong></span>
+                    </li>
+                    <li>
+                      Open{" "}
+                      <code className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-xs">
+                        chrome://flags/#prompt-api-for-gemini-nano
+                      </code>
+                      <br />
+                      <span className="text-xs">Set to <strong>"Enabled"</strong></span>
+                    </li>
+                  </ol>
+                </div>
+
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-medium text-foreground mb-2">
+                    Step 2: Restart & Wait
+                  </p>
+                  <ol className="list-decimal ml-4 space-y-1">
+                    <li>Restart Chrome completely</li>
+                    <li>Wait for the AI model to download (2-5 minutes)</li>
+                    <li>Click "Retry Loading AI Model" above</li>
+                  </ol>
+                </div>
+
+                <p className="text-xs text-muted-foreground/70">
+                  Note: Gemini Nano requires Chrome 128+ and sufficient disk space (~1GB).
+                </p>
+              </div>
+            </details>
           </div>
         )}
       </CardContent>
